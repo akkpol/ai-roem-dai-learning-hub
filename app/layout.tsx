@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Sans_Thai, Noto_Serif_Thai } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const notoSansThai = Noto_Sans_Thai({
@@ -29,7 +30,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="th">
-      <body className={`${notoSansThai.variable} ${notoSerifThai.variable}`}>{children}</body>
+      <body className={`${notoSansThai.variable} ${notoSerifThai.variable}`}>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

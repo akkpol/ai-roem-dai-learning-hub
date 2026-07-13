@@ -60,12 +60,14 @@ branch/role ได้ชัดเจน และไม่สร้าง Neon p
 - Runtime role: `app_runtime` (pooled connection, ไม่มีสิทธิ์ `CREATE` บน schema `public`)
 
 หลัง review โค้ดของ PR แล้ว ให้รัน `.github/workflows/provider-preview.yml` จาก branch `main`
-แบบ manual โดยระบุ exact reviewed ref และ Vercel Preview URL ระบบจะ reset branch `preview`
-จาก `production` ก่อนทุกครั้ง แล้วจึงลง migration/seed และตรวจ PostgreSQL version, migration
-journal, runtime grants, transactional write/rollback, Neon Auth JWKS และ URL ที่ deploy จริง
+แบบ manual โดยระบุ PR number และ exact 40-character head SHA ระบบตรวจ SHA กับ GitHub PR และหา
+Vercel deployment จาก GitHub Deployment ที่สร้างโดย `vercel[bot]` เท่านั้น จากนั้น reset branch
+`preview` จาก `production` ก่อนลง migration/seed และตรวจ PostgreSQL version, migration journal,
+runtime grants, transactional write/rollback, Neon Auth JWKS และ URL ที่ deploy จริง
 
-workflow นี้ห้ามรันอัตโนมัติจาก `pull_request` เพราะโค้ดใน PR ไม่ควรได้รับ Neon API key หรือ
-owner connection ก่อนผ่าน review และ secret ทั้งหมดต้องเป็น step-scoped หลัง `npm ci --ignore-scripts`
+workflow นี้ห้ามรันอัตโนมัติจาก `pull_request` และห้าม execute script/config จาก PR โดยตรง
+candidate checkout ใช้เป็น inert migration data เท่านั้น ส่วน dependency, safety tooling, seed และ
+smoke script มาจาก trusted `main` เพื่อไม่ให้โค้ดใน PR ได้รับ Neon/Vercel secrets
 
 ## 3. Connection roles
 
@@ -128,7 +130,7 @@ Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทด
 Preview:
 
 1. Review PR และรอ Vercel Preview ให้ Ready
-2. รัน `Provider Preview Gate` จาก `main` พร้อม exact reviewed ref และ Preview URL
+2. รัน `Provider Preview Gate` จาก `main` พร้อม PR number และ exact reviewed head SHA
 3. workflow reset branch `preview` จาก `production` เพื่อทิ้ง schema ของ PR ก่อนหน้า
 4. ตรวจ schema safety แล้วลง migration/seed ใน branch ที่ reset ใหม่
 5. ตรวจ runtime role, Neon Auth และ protected Vercel Preview deployment จริง
@@ -137,9 +139,10 @@ Production:
 
 1. PR ผ่าน CI, code review และ manual Provider Preview Gate
 2. Review schema diff
-3. ขอ approval ผ่าน GitHub Environment `production`
-4. รัน workflow `Migrate production database`
-5. Deploy application หลัง migration สำเร็จ
+3. รัน `Prepare production migration diff` และดาวน์โหลด artifact `schema-diff-<sha>`
+4. ตรวจ diff ด้วยคน แล้วรัน `Apply reviewed production migration` แยกต่างหาก โดยระบุ exact SHA
+   และ run ID ของ diff ที่ตรวจแล้ว
+5. ตรวจ Production deployment หลัง migration สำเร็จ
 
 ห้ามเพิ่ม `db:migrate` ใน `build`, `postinstall` หรือ Vercel Build Command
 

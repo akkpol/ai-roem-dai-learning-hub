@@ -1,31 +1,29 @@
-name: Migrate production database
+name: Prepare production migration diff
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type MIGRATE_PRODUCTION
+        description: Type PREPARE_PRODUCTION_DIFF
         required: true
         type: string
       approved_commit:
-        description: Exact main commit SHA reviewed for migration
+        description: Exact main commit SHA to prepare
         required: true
         type: string
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
-  group: production-database-migration
+  group: production-database-diff
   cancel-in-progress: false
 
 jobs:
-  preview-schema-diff:
-    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'MIGRATE_PRODUCTION' && inputs.approved_commit == github.sha
+  production-schema-diff:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PREPARE_PRODUCTION_DIFF' && inputs.approved_commit == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: provider-preview
     steps:
       - name: Reset Preview from Production before constructing the candidate schema
         id: reset-preview
@@ -48,9 +46,7 @@ jobs:
           node-version: 22.13.0
           cache: npm
 
-      - name: Install approved dependencies without lifecycle scripts
-        run: npm ci --ignore-scripts
-
+      - run: npm ci --ignore-scripts
       - run: npm run db:check
       - run: npm run db:safety
 
@@ -62,7 +58,7 @@ jobs:
       - name: Apply approved migration to the freshly reset Preview branch
         env:
           DATABASE_URL_UNPOOLED: ${{ steps.reset-preview.outputs.db_url }}
-        run: npm run db:migrate
+        run: npx drizzle-kit migrate
 
       - name: Capture and diff the candidate Preview schema
         shell: bash
@@ -86,30 +82,3 @@ jobs:
             schema-after.sql
             schema-diff.patch
           retention-days: 30
-
-  migrate-production:
-    needs: preview-schema-diff
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.13.0
-          cache: npm
-
-      - name: Install approved dependencies without lifecycle scripts
-        run: npm ci --ignore-scripts
-
-      - run: npm run db:check
-      - run: npm run db:safety
-
-      - name: Apply approved migrations to Production
-        env:
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-        run: npm run db:migrate

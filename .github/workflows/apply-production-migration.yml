@@ -1,0 +1,63 @@
+name: Apply reviewed production migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type APPLY_PRODUCTION_MIGRATION after reviewing the diff artifact
+        required: true
+        type: string
+      approved_commit:
+        description: Exact current main commit SHA
+        required: true
+        type: string
+      approved_diff_run_id:
+        description: Successful Prepare production migration diff workflow run ID reviewed by a human
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
+
+jobs:
+  apply-production:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'APPLY_PRODUCTION_MIGRATION' && inputs.approved_commit == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify the separately reviewed diff workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APPROVED_COMMIT: ${{ inputs.approved_commit }}
+          DIFF_RUN_ID: ${{ inputs.approved_diff_run_id }}
+        shell: bash
+        run: |
+          [[ "$DIFF_RUN_ID" =~ ^[0-9]+$ ]]
+          run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DIFF_RUN_ID}")"
+          test "$(jq -r '.conclusion' <<< "$run_json")" = "success"
+          test "$(jq -r '.head_sha' <<< "$run_json")" = "$APPROVED_COMMIT"
+          test "$(jq -r '.path' <<< "$run_json")" = ".github/workflows/migrate-production.yml"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npm run db:check
+      - run: npm run db:safety
+
+      - name: Apply the migration approved in the separate diff run
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: npx drizzle-kit migrate

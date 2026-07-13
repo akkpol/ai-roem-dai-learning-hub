@@ -10,7 +10,11 @@ const previewUrl = new URL(requireEnvironment("PREVIEW_URL"));
 const bypassSecret = requireEnvironment("VERCEL_AUTOMATION_BYPASS_SECRET");
 
 assert.equal(previewUrl.protocol, "https:", "Preview URL must use HTTPS");
-assert.ok(previewUrl.hostname.endsWith(".vercel.app"), "Preview URL must be a vercel.app deployment");
+assert.match(
+  previewUrl.hostname,
+  /^ai-roem-dai-learning-[a-z0-9]+-ak3lab\.vercel\.app$/,
+  "Preview URL must be a deployment for the expected Vercel project and team",
+);
 
 const headers = {
   "user-agent": "ai-roem-dai-provider-preview-smoke/1.0",
@@ -23,6 +27,7 @@ async function request(path, init = {}) {
     try {
       const response = await fetch(new URL(path, previewUrl), {
         ...init,
+        redirect: init.redirect ?? "manual",
         headers: { ...headers, ...init.headers },
       });
       if (response.status < 500 || attempt === 6) return response;

@@ -4,20 +4,22 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type RUN_PROVIDER_PREVIEW after reviewing the requested ref
+        description: Type RUN_PROVIDER_PREVIEW after reviewing the PR
         required: true
         type: string
-      reviewed_ref:
-        description: Exact reviewed branch or commit SHA to validate
+      pr_number:
+        description: Reviewed pull request number
         required: true
-        type: string
-      preview_url:
-        description: Ready Vercel Preview deployment URL for this ref
+        type: number
+      reviewed_sha:
+        description: Exact 40-character reviewed PR head SHA
         required: true
         type: string
 
 permissions:
   contents: read
+  deployments: read
+  pull-requests: read
 
 concurrency:
   group: provider-preview-database
@@ -28,8 +30,57 @@ jobs:
     if: github.ref == 'refs/heads/main' && inputs.confirmation == 'RUN_PROVIDER_PREVIEW'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: provider-preview
     steps:
+      - name: Checkout the trusted gate from main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: trusted
+          persist-credentials: false
+
+      - name: Verify immutable SHA against the reviewed PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        shell: bash
+        run: |
+          [[ "$REVIEWED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          actual_sha="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          test "$actual_sha" = "$REVIEWED_SHA"
+
+      - name: Checkout reviewed candidate as inert data
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.reviewed_sha }}
+          path: candidate
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: trusted/package-lock.json
+
+      - name: Install only trusted main dependencies without lifecycle scripts
+        working-directory: trusted
+        run: npm ci --ignore-scripts
+
+      - name: Import only reviewed migration data
+        shell: bash
+        run: |
+          test -d candidate/drizzle
+          test -z "$(find candidate/drizzle -type l -print -quit)"
+          test -z "$(find candidate/drizzle -type f ! \( -name '*.sql' -o -name '*.json' \) -print -quit)"
+          rm -rf trusted/drizzle
+          cp -R candidate/drizzle trusted/drizzle
+
+      - name: Check reviewed migration metadata and safety with trusted tooling
+        working-directory: trusted
+        run: |
+          npm run db:check
+          npm run db:safety
+
       - name: Reset the isolated Neon Preview branch from Production
         id: reset-preview
         uses: neondatabase/reset-branch-action@470ab8101095ea33737c294d17364a72fd80761b # v1
@@ -41,46 +92,51 @@ jobs:
           cs_database: neondb
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.reviewed_ref }}
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.13.0
-          cache: npm
-
-      - name: Install reviewed dependencies without lifecycle scripts
-        run: npm ci --ignore-scripts
-
-      - run: npm run db:check
-      - run: npm run db:safety
-
-      - name: Apply reviewed migrations to the freshly reset Preview branch
+      - name: Apply reviewed SQL with trusted Drizzle tooling
+        working-directory: trusted
         env:
           DATABASE_URL_UNPOOLED: ${{ steps.reset-preview.outputs.db_url }}
-        run: npm run db:migrate
+        run: npx drizzle-kit migrate
 
       - name: Verify migration journal with the Preview owner connection
         env:
           DATABASE_URL_UNPOOLED: ${{ steps.reset-preview.outputs.db_url }}
         run: psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations;"
 
-      - name: Seed non-production catalog data for deployed Preview checks
+      - name: Seed Preview using trusted main code
+        working-directory: trusted
         env:
           DATABASE_URL: ${{ steps.reset-preview.outputs.db_url }}
           CONFIRM_SEED: preview
-        run: npm run db:seed
+        run: npx tsx db/seed.ts
 
-      - name: Verify Preview runtime grants and Neon Auth
+      - name: Verify Preview runtime grants and Neon Auth with trusted code
+        working-directory: trusted
         env:
           DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
           NEON_AUTH_BASE_URL: ${{ vars.PREVIEW_NEON_AUTH_BASE_URL }}
-        run: npm run test:provider
+        run: node scripts/provider-preview-smoke.mjs
 
-      - name: Smoke the actual protected Vercel Preview deployment
+      - name: Resolve the successful Vercel deployment for the reviewed SHA
+        id: preview-deployment
         env:
-          PREVIEW_URL: ${{ inputs.preview_url }}
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_SHA: ${{ inputs.reviewed_sha }}
+        shell: bash
+        run: |
+          deployments="$(gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${REVIEWED_SHA}&environment=Preview")"
+          deployment_id="$(jq -r 'map(select(.creator.login == "vercel[bot]")) | first | .id // empty' <<< "$deployments")"
+          deployment_sha="$(jq -r 'map(select(.creator.login == "vercel[bot]")) | first | .sha // empty' <<< "$deployments")"
+          test -n "$deployment_id"
+          test "$deployment_sha" = "$REVIEWED_SHA"
+          preview_url="$(gh api "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+            --jq 'map(select(.state == "success" and .creator.login == "vercel[bot]")) | first | .environment_url')"
+          node -e 'const u=new URL(process.argv[1]); if(!/^ai-roem-dai-learning-[a-z0-9]+-ak3lab\.vercel\.app$/.test(u.hostname)) process.exit(1)' "$preview_url"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke the exact protected Vercel Preview deployment with trusted code
+        working-directory: trusted
+        env:
+          PREVIEW_URL: ${{ steps.preview-deployment.outputs.preview_url }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: npm run test:deployed-preview
+        run: node scripts/deployed-preview-smoke.mjs

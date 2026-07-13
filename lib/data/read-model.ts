@@ -13,9 +13,11 @@ import {
   assignments,
   certificates,
   cohorts,
+  courseFields,
   courseInstructors,
   courseInvites,
   courseMaterials,
+  courseTools,
   courses as courseTable,
   enrollmentCompletions,
   enrollments,
@@ -30,7 +32,12 @@ import {
   videoAccessGrants,
 } from "@/db/schema";
 import { calculateBetaScorecard } from "@/lib/analytics/kpis";
-import { courses as demoCatalog, type Course } from "@/lib/catalog";
+import {
+  courses as demoCatalog,
+  type Course,
+  type CourseField,
+  type CourseTool,
+} from "@/lib/catalog";
 import { canUseDemoData } from "@/lib/data/demo-policy";
 
 export type CohortCard = {
@@ -138,6 +145,108 @@ function demoCourseDetail(slug: string): CourseDetail | null {
 
 function thaiLevel(level: "beginner" | "applied" | "expert") {
   return level === "beginner" ? "เริ่มต้น" : level === "applied" ? "ประยุกต์ใช้" : "เชี่ยวชาญ";
+}
+
+const validCourseTools = new Set<CourseTool>(["ChatGPT", "Claude", "Gemini", "Copilot", "อื่น ๆ"]);
+const validCourseFields = new Set<CourseField>(["งานออฟฟิศ", "การตลาด", "คอนเทนต์", "ธุรกิจ", "เขียนโปรแกรม"]);
+
+function formatDuration(minutes: number) {
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (hours === 0) return `${remainder} นาที`;
+  return remainder === 0 ? `${hours} ชั่วโมง` : `${hours} ชั่วโมง ${remainder} นาที`;
+}
+
+function catalogCover(title: string, courseTools: CourseTool[]): Course["cover"] {
+  if (title.toLocaleLowerCase("th").includes("ข้อมูล")) return "analytics";
+  if (courseTools.includes("Gemini")) return "gemini";
+  if (courseTools.includes("Claude") || courseTools.includes("ChatGPT")) return "chat-claude";
+  return "fundamentals";
+}
+
+export async function getPublishedCourseCatalog(): Promise<Course[] | null> {
+  if (!hasDatabaseConnection()) {
+    return canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })
+      ? demoCatalog
+      : null;
+  }
+
+  const db = getDb();
+  const courseRows = await db
+    .select()
+    .from(courseTable)
+    .where(eq(courseTable.status, "published"))
+    .orderBy(asc(courseTable.title));
+  if (courseRows.length === 0) return [];
+
+  const courseIds = courseRows.map((course) => course.id);
+  const [toolRows, fieldRows, instructorRows, cohortRows] = await Promise.all([
+    db.select().from(courseTools).where(inArray(courseTools.courseId, courseIds)),
+    db.select().from(courseFields).where(inArray(courseFields.courseId, courseIds)),
+    db
+      .select({ courseId: courseInstructors.courseId, name: instructors.name, avatarUrl: instructors.avatarUrl })
+      .from(courseInstructors)
+      .innerJoin(instructors, eq(instructors.id, courseInstructors.instructorId))
+      .where(inArray(courseInstructors.courseId, courseIds)),
+    db
+      .select()
+      .from(cohorts)
+      .where(and(
+        inArray(cohorts.courseId, courseIds),
+        inArray(cohorts.status, ["collecting", "threshold_met", "confirmed"]),
+      ))
+      .orderBy(asc(cohorts.startsAt)),
+  ]);
+
+  const toolsByCourse = new Map<string, CourseTool[]>();
+  for (const row of toolRows) {
+    const tool = validCourseTools.has(row.tool as CourseTool) ? row.tool as CourseTool : "อื่น ๆ";
+    const values = toolsByCourse.get(row.courseId) ?? [];
+    if (!values.includes(tool)) values.push(tool);
+    toolsByCourse.set(row.courseId, values);
+  }
+  const fieldsByCourse = new Map<string, CourseField[]>();
+  for (const row of fieldRows) {
+    if (!validCourseFields.has(row.field as CourseField)) continue;
+    const field = row.field as CourseField;
+    const values = fieldsByCourse.get(row.courseId) ?? [];
+    if (!values.includes(field)) values.push(field);
+    fieldsByCourse.set(row.courseId, values);
+  }
+  const instructorByCourse = new Map<string, (typeof instructorRows)[number]>();
+  for (const row of instructorRows) {
+    if (!instructorByCourse.has(row.courseId)) instructorByCourse.set(row.courseId, row);
+  }
+  const cohortByCourse = new Map<string, (typeof cohortRows)[number]>();
+  for (const row of cohortRows) {
+    if (!cohortByCourse.has(row.courseId)) cohortByCourse.set(row.courseId, row);
+  }
+
+  return courseRows.map((course) => {
+    const itemTools = toolsByCourse.get(course.id) ?? ["อื่น ๆ"];
+    const itemFields = fieldsByCourse.get(course.id) ?? ["ธุรกิจ"];
+    const instructor = instructorByCourse.get(course.id);
+    const cohort = cohortByCourse.get(course.id);
+    return {
+      id: course.slug,
+      title: course.title,
+      level: thaiLevel(course.level),
+      tools: itemTools,
+      fields: itemFields,
+      format: cohort ? "คลาสสด" : "วิดีโอย้อนหลัง",
+      duration: formatDuration(course.durationMinutes),
+      instructor: instructor?.name ?? "ทีม AI เริ่มได้",
+      avatar: instructor?.avatarUrl ?? "/images/avatar-natthapong.webp",
+      availability: cohort
+        ? `เริ่ม ${cohort.startsAt.toLocaleDateString("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" })}`
+        : "เรียนได้ทันที",
+      time: cohort
+        ? cohort.startsAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" })
+        : undefined,
+      certificate: course.certificateEnabled,
+      cover: catalogCover(course.title, itemTools),
+    } satisfies Course;
+  });
 }
 
 export async function getCourseDetail(slug: string): Promise<CourseDetail | null> {

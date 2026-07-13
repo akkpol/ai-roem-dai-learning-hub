@@ -98,6 +98,20 @@ describe.skipIf(!runDatabaseTests)("Closed Beta database integration", () => {
     await expect(reserveInvitedSeat(COHORT_ID)).rejects.toThrow("ปิดรับ");
   });
 
+  it("loads the production discovery catalog from published database courses", async () => {
+    const { getPublishedCourseCatalog } = await import("@/lib/data/read-model");
+
+    const catalog = await getPublishedCourseCatalog();
+    expect(catalog).toHaveLength(1);
+    expect(catalog?.[0]).toMatchObject({
+      id: "integration-course",
+      title: "Integration Course",
+      level: "เริ่มต้น",
+      tools: ["อื่น ๆ"],
+      fields: ["ธุรกิจ"],
+    });
+  });
+
   it("does not convert an expired active reservation during admin confirmation", async () => {
     await insertCohort(adminClient, {
       id: COHORT_ID,

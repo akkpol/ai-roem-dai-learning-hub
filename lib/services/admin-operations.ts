@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import {
@@ -10,7 +10,6 @@ import {
   courses,
   enrollments,
   liveSessions,
-  seatReservations,
   sessionAttendance,
   submissions,
 } from "@/db/schema";
@@ -172,24 +171,8 @@ export async function updateCohortByAdmin(input: {
       .for("update")
       .limit(1);
     if (!current) throw new Error("ไม่พบรุ่นเรียนนี้");
-    if (["confirmed", "in_progress", "completed", "cancelled"].includes(current.status)) {
-      throw new Error("แก้ได้เฉพาะรุ่นที่ยังไม่ยืนยันเปิด");
-    }
-
-    if (current.startsAt.getTime() !== parsed.startsAt.getTime()) {
-      const [reservation] = await tx
-        .select({ id: seatReservations.id })
-        .from(seatReservations)
-        .where(
-          and(
-            eq(seatReservations.cohortId, current.id),
-            inArray(seatReservations.status, ["active", "waitlisted", "expired", "moved"]),
-          ),
-        )
-        .limit(1);
-      if (reservation) {
-        throw new Error("มีผู้จองแล้ว ต้องสร้างรุ่นใหม่และให้ผู้เรียนยืนยันย้ายเอง");
-      }
+    if (current.status !== "draft") {
+      throw new Error("แก้วันและจำนวนรับได้เฉพาะ draft; เมื่อเปิดรับแล้วต้องสร้างรุ่นใหม่");
     }
 
     const [updated] = await tx
@@ -202,17 +185,9 @@ export async function updateCohortByAdmin(input: {
         maximumEnrollment: parsed.maximumEnrollment,
         updatedAt: new Date(),
       })
-      .where(
-        and(
-          eq(cohorts.id, parsed.cohortId),
-          ne(cohorts.status, "confirmed"),
-          ne(cohorts.status, "in_progress"),
-          ne(cohorts.status, "completed"),
-          ne(cohorts.status, "cancelled"),
-        ),
-      )
+      .where(and(eq(cohorts.id, parsed.cohortId), eq(cohorts.status, "draft")))
       .returning();
-    if (!updated) throw new Error("แก้ได้เฉพาะรุ่นที่ยังไม่ยืนยันเปิด");
+    if (!updated) throw new Error("แก้วันและจำนวนรับได้เฉพาะ draft");
     await tx.insert(auditLogs).values({
       actorUserId: admin.userId,
       action: "cohort.update",

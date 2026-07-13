@@ -32,7 +32,6 @@ import {
 } from "react-icons/si";
 import { TbBrandOpenai } from "react-icons/tb";
 import {
-  courses,
   fields,
   levels,
   tools,
@@ -162,7 +161,7 @@ function FilterButton<T extends string>({
   );
 }
 
-export function CourseDiscovery() {
+export function CourseDiscovery({ courses }: { courses: Course[] }) {
   const [filters, setFilters] = useState<FilterState>(initialFilters);
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
@@ -198,7 +197,7 @@ export function CourseDiscovery() {
     });
 
     return isDefaultView ? matches.slice(0, 4) : matches;
-  }, [filters, saved, savedOnly, submittedQuery]);
+  }, [courses, filters, saved, savedOnly, submittedQuery]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

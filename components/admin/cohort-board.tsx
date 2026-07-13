@@ -67,7 +67,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
         )
       )}
       {status === "confirmed" && <p className="success-note">สร้าง enrollment แล้ว · meeting link เปิดให้เฉพาะสมาชิกในรุ่น</p>}
-      {!["confirmed", "in_progress", "completed", "cancelled"].includes(status) && (
+      {status === "draft" && (
         <details className="admin-control-panel">
           <summary>แก้วันและจำนวนรับ</summary>
           <form action={editAction} onSubmit={demo ? (event) => { event.preventDefault(); setDemoMessage("บันทึกการแก้ไขในโหมดตัวอย่างแล้ว"); } : undefined} className="admin-stack-form">

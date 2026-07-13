@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   production-schema-diff:
+    name: production-schema-diff
     if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PREPARE_PRODUCTION_DIFF' && inputs.approved_commit == github.sha
     runs-on: ubuntu-latest
     timeout-minutes: 20

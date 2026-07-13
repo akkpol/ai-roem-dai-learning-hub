@@ -7,7 +7,7 @@ function requireEnvironment(name) {
 }
 
 const previewUrl = new URL(requireEnvironment("PREVIEW_URL"));
-const bypassSecret = requireEnvironment("VERCEL_AUTOMATION_BYPASS_SECRET");
+const trustedOidcToken = requireEnvironment("VERCEL_TRUSTED_OIDC_TOKEN");
 
 assert.equal(previewUrl.protocol, "https:", "Preview URL must use HTTPS");
 assert.match(
@@ -18,7 +18,7 @@ assert.match(
 
 const headers = {
   "user-agent": "ai-roem-dai-provider-preview-smoke/1.0",
-  "x-vercel-protection-bypass": bypassSecret,
+  "x-vercel-trusted-oidc-idp-token": trustedOidcToken,
 };
 
 async function request(path, init = {}) {

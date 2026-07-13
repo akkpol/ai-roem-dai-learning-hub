@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Verify the separately reviewed diff workflow run
+      - name: Verify and download the separately reviewed diff artifact
         env:
           GH_TOKEN: ${{ github.token }}
           APPROVED_COMMIT: ${{ inputs.approved_commit }}
@@ -42,6 +42,30 @@ jobs:
           test "$(jq -r '.conclusion' <<< "$run_json")" = "success"
           test "$(jq -r '.head_sha' <<< "$run_json")" = "$APPROVED_COMMIT"
           test "$(jq -r '.path' <<< "$run_json")" = ".github/workflows/migrate-production.yml"
+
+          jobs_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DIFF_RUN_ID}/jobs?filter=latest&per_page=100")"
+          successful_diff_jobs="$(jq '[.jobs[] | select(.name == "production-schema-diff" and .status == "completed" and .conclusion == "success")] | length' <<< "$jobs_json")"
+          test "$successful_diff_jobs" = "1"
+
+          artifact_name="schema-diff-${APPROVED_COMMIT}"
+          artifacts_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DIFF_RUN_ID}/artifacts?per_page=100")"
+          artifact_id="$(jq -r \
+            --arg name "$artifact_name" \
+            --argjson run_id "$DIFF_RUN_ID" \
+            '[.artifacts[] | select(.name == $name and .expired == false and .workflow_run.id == $run_id)] | if length == 1 then .[0].id else empty end' \
+            <<< "$artifacts_json")"
+          test -n "$artifact_id"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > approved-schema-diff.zip
+          expected_entries="$(printf '%s\n' schema-after.sql schema-before.sql schema-diff.patch | LC_ALL=C sort)"
+          actual_entries="$(unzip -Z1 approved-schema-diff.zip | LC_ALL=C sort)"
+          test "$actual_entries" = "$expected_entries"
+          mkdir approved-schema-diff
+          unzip -q approved-schema-diff.zip -d approved-schema-diff
+          test -s approved-schema-diff/schema-before.sql
+          test -s approved-schema-diff/schema-after.sql
+          test -f approved-schema-diff/schema-diff.patch
+          sha256sum approved-schema-diff/schema-before.sql approved-schema-diff/schema-after.sql approved-schema-diff/schema-diff.patch
 
       - uses: actions/checkout@v4
         with:

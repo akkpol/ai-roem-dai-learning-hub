@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   deployments: read
+  id-token: write
   pull-requests: read
 
 concurrency:
@@ -134,9 +135,18 @@ jobs:
           node -e 'const u=new URL(process.argv[1]); if(!/^ai-roem-dai-learning-[a-z0-9]+-ak3lab\.vercel\.app$/.test(u.hostname)) process.exit(1)' "$preview_url"
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
 
+      - name: Mint a short-lived GitHub OIDC token for Vercel Trusted Sources
+        id: vercel-oidc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const token = await core.getIDToken();
+            core.setSecret(token);
+            core.setOutput("token", token);
+
       - name: Smoke the exact protected Vercel Preview deployment with trusted code
         working-directory: trusted
         env:
           PREVIEW_URL: ${{ steps.preview-deployment.outputs.preview_url }}
-          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          VERCEL_TRUSTED_OIDC_TOKEN: ${{ steps.vercel-oidc.outputs.token }}
         run: node scripts/deployed-preview-smoke.mjs

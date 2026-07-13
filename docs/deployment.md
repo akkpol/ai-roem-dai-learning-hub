@@ -67,7 +67,10 @@ runtime grants, transactional write/rollback, Neon Auth JWKS และ URL ท�
 
 workflow นี้ห้ามรันอัตโนมัติจาก `pull_request` และห้าม execute script/config จาก PR โดยตรง
 candidate checkout ใช้เป็น inert migration data เท่านั้น ส่วน dependency, safety tooling, seed และ
-smoke script มาจาก trusted `main` เพื่อไม่ให้โค้ดใน PR ได้รับ Neon/Vercel secrets
+smoke script มาจาก trusted `main` เพื่อไม่ให้โค้ดใน PR ได้รับ Neon secrets การเข้าถึง protected
+Preview ใช้ Vercel Trusted Sources กับ GitHub OIDC อายุสั้น โดยจำกัดที่ repository นี้,
+`provider-preview.yml`, branch `main` และ environment `preview` ห้ามสร้างหรือเก็บ
+`VERCEL_AUTOMATION_BYPASS_SECRET` แบบระยะยาว
 
 ## 3. Connection roles
 
@@ -141,7 +144,8 @@ Production:
 2. Review schema diff
 3. รัน `Prepare production migration diff` และดาวน์โหลด artifact `schema-diff-<sha>`
 4. ตรวจ diff ด้วยคน แล้วรัน `Apply reviewed production migration` แยกต่างหาก โดยระบุ exact SHA
-   และ run ID ของ diff ที่ตรวจแล้ว
+   และ run ID ของ diff ที่ตรวจแล้ว ระบบต้องยืนยันว่า job `production-schema-diff` สำเร็จและ
+   ดาวน์โหลด artifact ชื่อที่ตรงกับ SHA จาก run เดียวกันก่อนเปิดใช้ Production database secret
 5. ตรวจ Production deployment หลัง migration สำเร็จ
 
 ห้ามเพิ่ม `db:migrate` ใน `build`, `postinstall` หรือ Vercel Build Command

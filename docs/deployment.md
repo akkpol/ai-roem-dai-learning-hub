@@ -37,13 +37,40 @@ npx neonctl@latest init
 - Region: `sin1` ถูกกำหนดใน `vercel.json`
 - เชื่อม Git repository และเปิด Production Branch Protection
 
-ติดตั้ง Neon-Managed Vercel Integration จาก Neon และกำหนด:
+Closed Beta ปัจจุบันใช้ official manual connection เพื่อให้เลือก `production` และ `preview`
+branch/role ได้ชัดเจน และไม่สร้าง Neon project ซ้ำ:
 
 - Production environment → production database branch
 - Preview environment → database branch แยกจาก production
-- Development environment → development branch หรือ local-only connection
+- Development environment → local-only connection
 
 อย่าแชร์ branch ระหว่าง Production กับ Preview
+
+หากเปิด Neon-Managed Integration ภายหลัง ให้ทำผ่าน Neon Console → Integrations → Vercel
+แล้วเลือก **Link Existing Neon Account** เท่านั้น ก่อนเชื่อมให้ลบตัวแปร `DATABASE_URL` ที่ตั้งเอง
+เพื่อป้องกัน environment conflict ห้ามใช้ `vercel integration add neon` สำหรับงานนี้ เพราะคำสั่ง CLI
+ดังกล่าวมีหน้าที่ provision Marketplace resource ใหม่ ไม่ใช่ผูก Neon project เดิม
+
+ค่าที่ใช้กับ Closed Beta นี้:
+
+- Neon project: `ai-roem-dai-learning-hub` (`raspy-feather-85795196`)
+- Production branch: `production`
+- Persistent provider-test branch: `preview`
+- Migration role: `neondb_owner` (direct connection, GitHub Actions secret เท่านั้น)
+- Runtime role: `app_runtime` (pooled connection, ไม่มีสิทธิ์ `CREATE` บน schema `public`)
+
+หลัง review โค้ดของ PR แล้ว ให้รัน `.github/workflows/provider-preview.yml` จาก branch `main`
+แบบ manual โดยระบุ PR number และ exact 40-character head SHA ระบบตรวจ SHA กับ GitHub PR และหา
+Vercel deployment จาก GitHub Deployment ที่สร้างโดย `vercel[bot]` เท่านั้น จากนั้น reset branch
+`preview` จาก `production` ก่อนลง migration/seed และตรวจ PostgreSQL version, migration journal,
+runtime grants, transactional write/rollback, Neon Auth JWKS และ URL ที่ deploy จริง
+
+workflow นี้ห้ามรันอัตโนมัติจาก `pull_request` และห้าม execute script/config จาก PR โดยตรง
+candidate checkout ใช้เป็น inert migration data เท่านั้น ส่วน dependency, safety tooling, seed และ
+smoke script มาจาก trusted `main` เพื่อไม่ให้โค้ดใน PR ได้รับ Neon secrets การเข้าถึง protected
+Preview ใช้ Vercel Trusted Sources กับ GitHub OIDC อายุสั้น โดยจำกัดที่ repository นี้,
+`provider-preview.yml`, branch `main` และ environment `preview` ห้ามสร้างหรือเก็บ
+`VERCEL_AUTOMATION_BYPASS_SECRET` แบบระยะยาว
 
 ## 3. Connection roles
 
@@ -81,6 +108,8 @@ Production trusted origins ต้องมีเฉพาะ production URL แ�
 5. ห้ามใช้รหัสผ่าน Gmail หลัก
 
 ทดสอบ invitation, deadline reminder และ confirmed email ใน Preview ก่อน Production
+หาก SMTP ไม่ครบหรือมีรายการส่งไม่สำเร็จ endpoint notification จะตอบ non-2xx และเขียน structured
+error ลง runtime log เพื่อไม่ให้ monitoring แสดงผลเขียวผิด ๆ
 
 ## 6. Vercel Blob และ Cron
 
@@ -91,25 +120,33 @@ Cron ใน `vercel.json`:
 - `/api/cron/cohort-deadlines` ตรวจ reminder และ postpone แบบ idempotent
 - `/api/cron/notifications` claim outbox ด้วย row lock และส่งอีเมล
 
+Vercel Hobby จำกัดแต่ละ cron ให้รันได้วันละครั้ง จึงตั้ง Vercel Cron ทั้งสามงานเป็น daily safety run
+และใช้ `.github/workflows/scheduled-notifications.yml` เรียก notification outbox ทุก 30 นาที
+ด้วย `CRON_SECRET` เดียวกัน เปิด schedule นี้ด้วย repository variable
+`EMAIL_DELIVERY_ENABLED=true` หลังใส่ Gmail SMTP และทดสอบสำเร็จแล้วเท่านั้น เมื่ออัปเกรด Vercel
+Pro จึงค่อยย้ายความถี่กลับมาไว้ที่ Vercel Cron
+
 Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทดสอบการรันซ้ำว่าไม่มี notification ซ้ำ
 
 ## 7. Migration policy
 
 Preview:
 
-1. สร้าง Preview database branch
-2. รัน `npm run db:check`
-3. ตรวจ schema diff และ baseline SQL ว่าไม่มี destructive statement ที่ไม่ตั้งใจ
-4. รัน `DATABASE_URL_UNPOOLED=<preview-direct-url> npm run db:migrate`
-5. รัน smoke flow บน Vercel Preview
+1. Review PR และรอ Vercel Preview ให้ Ready
+2. รัน `Provider Preview Gate` จาก `main` พร้อม PR number และ exact reviewed head SHA
+3. workflow reset branch `preview` จาก `production` เพื่อทิ้ง schema ของ PR ก่อนหน้า
+4. ตรวจ schema safety แล้วลง migration/seed ใน branch ที่ reset ใหม่
+5. ตรวจ runtime role, Neon Auth และ protected Vercel Preview deployment จริง
 
 Production:
 
-1. PR ผ่าน CI และ Preview smoke test
+1. PR ผ่าน CI, code review และ manual Provider Preview Gate
 2. Review schema diff
-3. ขอ approval ผ่าน GitHub Environment `production`
-4. รัน workflow `Migrate production database`
-5. Deploy application หลัง migration สำเร็จ
+3. รัน `Prepare production migration diff` และดาวน์โหลด artifact `schema-diff-<sha>`
+4. ตรวจ diff ด้วยคน แล้วรัน `Apply reviewed production migration` แยกต่างหาก โดยระบุ exact SHA
+   และ run ID ของ diff ที่ตรวจแล้ว ระบบต้องยืนยันว่า job `production-schema-diff` สำเร็จและ
+   ดาวน์โหลด artifact ชื่อที่ตรงกับ SHA จาก run เดียวกันก่อนเปิดใช้ Production database secret
+5. ตรวจ Production deployment หลัง migration สำเร็จ
 
 ห้ามเพิ่ม `db:migrate` ใน `build`, `postinstall` หรือ Vercel Build Command
 

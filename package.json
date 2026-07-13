@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:provider": "node scripts/provider-preview-smoke.mjs",
+    "test:deployed-preview": "node scripts/deployed-preview-smoke.mjs",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

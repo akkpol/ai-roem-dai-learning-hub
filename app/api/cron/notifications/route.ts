@@ -12,14 +12,23 @@ export async function GET(request: NextRequest) {
   }
 
   if (!hasGmailConfiguration()) {
-    return Response.json({
+    const unavailable = {
+      error: "Email provider unavailable",
+      code: "gmail_smtp_not_configured",
       claimed: 0,
       sent: 0,
       failed: 0,
-      skipped: "gmail_smtp_not_configured",
-    });
+    };
+    console.error("notification_delivery_unavailable", unavailable);
+    return Response.json(unavailable, { status: 503 });
   }
 
   const result = await sendPendingNotifications();
+  if (result.failed > 0) {
+    const failed = { error: "Notification delivery failed", ...result };
+    console.error("notification_delivery_failed", failed);
+    return Response.json(failed, { status: 502 });
+  }
+
   return Response.json(result);
 }

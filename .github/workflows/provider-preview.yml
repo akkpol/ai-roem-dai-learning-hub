@@ -1,9 +1,20 @@
 name: Provider Preview Gate
 
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN_PROVIDER_PREVIEW after reviewing the requested ref
+        required: true
+        type: string
+      reviewed_ref:
+        description: Exact reviewed branch or commit SHA to validate
+        required: true
+        type: string
+      preview_url:
+        description: Ready Vercel Preview deployment URL for this ref
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,23 +25,62 @@ concurrency:
 
 jobs:
   provider-preview:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'RUN_PROVIDER_PREVIEW'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
-      DATABASE_URL_UNPOOLED: ${{ secrets.PREVIEW_DATABASE_URL_UNPOOLED }}
-      NEON_AUTH_BASE_URL: ${{ vars.PREVIEW_NEON_AUTH_BASE_URL }}
+    timeout-minutes: 20
+    environment: provider-preview
     steps:
+      - name: Reset the isolated Neon Preview branch from Production
+        id: reset-preview
+        uses: neondatabase/reset-branch-action@470ab8101095ea33737c294d17364a72fd80761b # v1
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ vars.NEON_PREVIEW_BRANCH_ID }}
+          parent: true
+          cs_role_name: neondb_owner
+          cs_database: neondb
+          api_key: ${{ secrets.NEON_API_KEY }}
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.reviewed_ref }}
+          persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
-      - run: npm ci
+
+      - name: Install reviewed dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
       - run: npm run db:check
       - run: npm run db:safety
-      - name: Apply migrations to the isolated Neon Preview branch
+
+      - name: Apply reviewed migrations to the freshly reset Preview branch
+        env:
+          DATABASE_URL_UNPOOLED: ${{ steps.reset-preview.outputs.db_url }}
         run: npm run db:migrate
-      - name: Verify Neon Preview providers and least-privilege runtime role
+
+      - name: Verify migration journal with the Preview owner connection
+        env:
+          DATABASE_URL_UNPOOLED: ${{ steps.reset-preview.outputs.db_url }}
+        run: psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -c "select count(*) from drizzle.__drizzle_migrations;"
+
+      - name: Seed non-production catalog data for deployed Preview checks
+        env:
+          DATABASE_URL: ${{ steps.reset-preview.outputs.db_url }}
+          CONFIRM_SEED: preview
+        run: npm run db:seed
+
+      - name: Verify Preview runtime grants and Neon Auth
+        env:
+          DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+          NEON_AUTH_BASE_URL: ${{ vars.PREVIEW_NEON_AUTH_BASE_URL }}
         run: npm run test:provider
+
+      - name: Smoke the actual protected Vercel Preview deployment
+        env:
+          PREVIEW_URL: ${{ inputs.preview_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: npm run test:deployed-preview

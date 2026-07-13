@@ -59,9 +59,13 @@ branch/role ได้ชัดเจน และไม่สร้าง Neon p
 - Migration role: `neondb_owner` (direct connection, GitHub Actions secret เท่านั้น)
 - Runtime role: `app_runtime` (pooled connection, ไม่มีสิทธิ์ `CREATE` บน schema `public`)
 
-ทุก PR จาก repository นี้ต้องผ่าน `.github/workflows/provider-preview.yml` ซึ่งลง migration บน
-branch `preview` และตรวจ PostgreSQL version, migration journal, ตารางสำคัญ, runtime grants,
-transactional write/rollback และ Neon Auth JWKS ก่อน merge
+หลัง review โค้ดของ PR แล้ว ให้รัน `.github/workflows/provider-preview.yml` จาก branch `main`
+แบบ manual โดยระบุ exact reviewed ref และ Vercel Preview URL ระบบจะ reset branch `preview`
+จาก `production` ก่อนทุกครั้ง แล้วจึงลง migration/seed และตรวจ PostgreSQL version, migration
+journal, runtime grants, transactional write/rollback, Neon Auth JWKS และ URL ที่ deploy จริง
+
+workflow นี้ห้ามรันอัตโนมัติจาก `pull_request` เพราะโค้ดใน PR ไม่ควรได้รับ Neon API key หรือ
+owner connection ก่อนผ่าน review และ secret ทั้งหมดต้องเป็น step-scoped หลัง `npm ci --ignore-scripts`
 
 ## 3. Connection roles
 
@@ -99,6 +103,8 @@ Production trusted origins ต้องมีเฉพาะ production URL แ�
 5. ห้ามใช้รหัสผ่าน Gmail หลัก
 
 ทดสอบ invitation, deadline reminder และ confirmed email ใน Preview ก่อน Production
+หาก SMTP ไม่ครบหรือมีรายการส่งไม่สำเร็จ endpoint notification จะตอบ non-2xx และเขียน structured
+error ลง runtime log เพื่อไม่ให้ monitoring แสดงผลเขียวผิด ๆ
 
 ## 6. Vercel Blob และ Cron
 
@@ -111,7 +117,9 @@ Cron ใน `vercel.json`:
 
 Vercel Hobby จำกัดแต่ละ cron ให้รันได้วันละครั้ง จึงตั้ง Vercel Cron ทั้งสามงานเป็น daily safety run
 และใช้ `.github/workflows/scheduled-notifications.yml` เรียก notification outbox ทุก 30 นาที
-ด้วย `CRON_SECRET` เดียวกัน เมื่ออัปเกรด Vercel Pro จึงค่อยย้ายความถี่กลับมาไว้ที่ Vercel Cron
+ด้วย `CRON_SECRET` เดียวกัน เปิด schedule นี้ด้วย repository variable
+`EMAIL_DELIVERY_ENABLED=true` หลังใส่ Gmail SMTP และทดสอบสำเร็จแล้วเท่านั้น เมื่ออัปเกรด Vercel
+Pro จึงค่อยย้ายความถี่กลับมาไว้ที่ Vercel Cron
 
 Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทดสอบการรันซ้ำว่าไม่มี notification ซ้ำ
 
@@ -119,15 +127,15 @@ Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทด
 
 Preview:
 
-1. สร้าง Preview database branch
-2. รัน `npm run db:check`
-3. ตรวจ schema diff และ baseline SQL ว่าไม่มี destructive statement ที่ไม่ตั้งใจ
-4. รัน `DATABASE_URL_UNPOOLED=<preview-direct-url> npm run db:migrate`
-5. รัน smoke flow บน Vercel Preview
+1. Review PR และรอ Vercel Preview ให้ Ready
+2. รัน `Provider Preview Gate` จาก `main` พร้อม exact reviewed ref และ Preview URL
+3. workflow reset branch `preview` จาก `production` เพื่อทิ้ง schema ของ PR ก่อนหน้า
+4. ตรวจ schema safety แล้วลง migration/seed ใน branch ที่ reset ใหม่
+5. ตรวจ runtime role, Neon Auth และ protected Vercel Preview deployment จริง
 
 Production:
 
-1. PR ผ่าน CI และ Preview smoke test
+1. PR ผ่าน CI, code review และ manual Provider Preview Gate
 2. Review schema diff
 3. ขอ approval ผ่าน GitHub Environment `production`
 4. รัน workflow `Migrate production database`

@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import {
@@ -15,9 +15,11 @@ import { requireAdmin, requireMember } from "@/lib/auth/authorization";
 import {
   confirmCohort,
   evaluateCohort,
+  getReservationWindowState,
   reserveSeat,
   withdrawReservation as evaluateWithdrawal,
 } from "@/lib/domain/cohort";
+import { assertInviteCapacity } from "@/lib/domain/invitations";
 
 const cohortIdSchema = z.string().uuid();
 
@@ -40,6 +42,14 @@ export async function reserveInvitedSeat(rawCohortId: string) {
       .for("update")
       .limit(1);
     if (!cohort) throw new Error("ไม่พบรุ่นเรียนนี้");
+    const now = new Date();
+    const windowState = getReservationWindowState({
+      registrationOpensAt: cohort.registrationOpensAt,
+      registrationDeadlineAt: cohort.registrationDeadlineAt,
+      now,
+    });
+    if (windowState === "not_open") throw new Error("รุ่นนี้ยังไม่เปิดรับการจอง");
+    if (windowState === "closed") throw new Error("รุ่นนี้ปิดรับการจองแล้ว");
 
     const [invite] = await tx
       .select()
@@ -52,9 +62,21 @@ export async function reserveInvitedSeat(rawCohortId: string) {
         ),
       )
       .limit(1);
-    if (!invite || invite.expiresAt.getTime() <= Date.now()) {
+    if (!invite || invite.expiresAt.getTime() <= now.getTime()) {
       throw new Error("คำเชิญไม่ถูกต้องหรือหมดอายุแล้ว");
     }
+
+    await tx
+      .update(seatReservations)
+      .set({ status: "expired", updatedAt: now })
+      .where(
+        and(
+          eq(seatReservations.cohortId, cohortId),
+          eq(seatReservations.userId, member.userId),
+          inArray(seatReservations.status, ["active", "waitlisted"]),
+          lte(seatReservations.expiresAt, now),
+        ),
+      );
 
     const [existing] = await tx
       .select()
@@ -64,6 +86,7 @@ export async function reserveInvitedSeat(rawCohortId: string) {
           eq(seatReservations.cohortId, cohortId),
           eq(seatReservations.userId, member.userId),
           inArray(seatReservations.status, ["active", "waitlisted"]),
+          or(isNull(seatReservations.expiresAt), gt(seatReservations.expiresAt, now)),
         ),
       )
       .limit(1);
@@ -78,6 +101,7 @@ export async function reserveInvitedSeat(rawCohortId: string) {
         and(
           eq(seatReservations.cohortId, cohortId),
           eq(seatReservations.status, "active"),
+          or(isNull(seatReservations.expiresAt), gt(seatReservations.expiresAt, now)),
         ),
       );
 
@@ -96,7 +120,7 @@ export async function reserveInvitedSeat(rawCohortId: string) {
         userId: member.userId,
         status: decision === "reserved" ? "active" : "waitlisted",
         proposedStartsAt: cohort.startsAt,
-        expiresAt: cohort.registrationDeadlineAt,
+        expiresAt: cohort.status === "threshold_met" ? null : cohort.registrationDeadlineAt,
       })
       .returning();
 
@@ -105,7 +129,7 @@ export async function reserveInvitedSeat(rawCohortId: string) {
       .set({
         status: "accepted",
         acceptedByUserId: member.userId,
-        acceptedAt: new Date(),
+        acceptedAt: now,
       })
       .where(eq(courseInvites.id, invite.id));
 
@@ -132,7 +156,7 @@ export async function reserveInvitedSeat(rawCohortId: string) {
         activeReservations: activeReservations + 1,
         registrationDeadlineAt: cohort.registrationDeadlineAt,
         thresholdReachedAt: cohort.thresholdReachedAt,
-        now: new Date(),
+        now,
       });
 
       if (next.status !== cohort.status) {
@@ -141,9 +165,20 @@ export async function reserveInvitedSeat(rawCohortId: string) {
           .set({
             status: next.status,
             thresholdReachedAt: next.thresholdReachedAt,
-            updatedAt: new Date(),
+            updatedAt: now,
           })
           .where(eq(cohorts.id, cohort.id));
+        if (next.status === "threshold_met") {
+          await tx
+            .update(seatReservations)
+            .set({ expiresAt: null, updatedAt: now })
+            .where(
+              and(
+                eq(seatReservations.cohortId, cohort.id),
+                eq(seatReservations.status, "active"),
+              ),
+            );
+        }
         await tx.insert(cohortStatusHistory).values({
           cohortId,
           fromStatus: cohort.status,
@@ -212,6 +247,7 @@ export async function confirmCohortByAdmin(input: {
   const admin = await requireAdmin();
 
   return getDb().transaction(async (tx) => {
+    const confirmedAt = new Date();
     const [cohort] = await tx
       .select()
       .from(cohorts)
@@ -232,6 +268,10 @@ export async function confirmCohortByAdmin(input: {
         and(
           eq(seatReservations.cohortId, cohort.id),
           eq(seatReservations.status, "active"),
+          or(
+            isNull(seatReservations.expiresAt),
+            gt(seatReservations.expiresAt, confirmedAt),
+          ),
         ),
       );
 
@@ -245,7 +285,6 @@ export async function confirmCohortByAdmin(input: {
       return { changed: false, enrollmentsCreated: 0 };
     }
 
-    const confirmedAt = new Date();
     await tx
       .update(cohorts)
       .set({
@@ -438,6 +477,17 @@ export async function processCohortDeadlines(now = new Date()) {
         .limit(1);
       if (!cohort || cohort.status !== "collecting") return false;
 
+      await tx
+        .update(seatReservations)
+        .set({ status: "expired", updatedAt: now })
+        .where(
+          and(
+            eq(seatReservations.cohortId, cohort.id),
+            inArray(seatReservations.status, ["active", "waitlisted"]),
+            lte(seatReservations.expiresAt, now),
+          ),
+        );
+
       const [{ value: activeReservations }] = await tx
         .select({ value: count() })
         .from(seatReservations)
@@ -475,7 +525,7 @@ export async function processCohortDeadlines(now = new Date()) {
         .where(
           and(
             eq(seatReservations.cohortId, cohort.id),
-            inArray(seatReservations.status, ["active", "waitlisted"]),
+            inArray(seatReservations.status, ["expired", "waitlisted"]),
           ),
         );
       for (const recipient of recipients) {
@@ -570,7 +620,7 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
         and(
           eq(seatReservations.cohortId, originalCohort.id),
           eq(seatReservations.userId, member.userId),
-          inArray(seatReservations.status, ["active", "waitlisted"]),
+          inArray(seatReservations.status, ["active", "waitlisted", "expired"]),
         ),
       )
       .for("update")
@@ -587,12 +637,39 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
       .for("update")
       .limit(1);
     if (!fallback) throw new Error("ไม่พบรุ่นใหม่");
+    const now = new Date();
+    const fallbackWindow = getReservationWindowState({
+      registrationOpensAt: fallback.registrationOpensAt,
+      registrationDeadlineAt: fallback.registrationDeadlineAt,
+      now,
+    });
+    if (fallbackWindow !== "open") {
+      throw new Error(
+        fallbackWindow === "not_open" ? "รุ่นใหม่ยังไม่เปิดรับการจอง" : "รุ่นใหม่ปิดรับแล้ว",
+      );
+    }
     const [originalInvite] = await tx
       .select()
       .from(courseInvites)
       .where(eq(courseInvites.id, originalReservation.inviteId))
       .limit(1);
     if (!originalInvite) throw new Error("ไม่พบคำเชิญเดิม");
+
+    const [{ value: fallbackInviteCount }] = await tx
+      .select({ value: count() })
+      .from(courseInvites)
+      .where(eq(courseInvites.cohortId, fallback.id));
+    const [existingFallbackInvite] = await tx
+      .select()
+      .from(courseInvites)
+      .where(
+        and(
+          eq(courseInvites.cohortId, fallback.id),
+          sql`lower(${courseInvites.email}) = lower(${member.email})`,
+        ),
+      )
+      .limit(1);
+    if (!existingFallbackInvite) assertInviteCapacity(fallbackInviteCount, 1);
 
     let [fallbackInvite] = await tx
       .insert(courseInvites)
@@ -603,7 +680,7 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
         invitedByUserId: originalInvite.invitedByUserId,
         acceptedByUserId: member.userId,
         expiresAt: fallback.registrationDeadlineAt,
-        acceptedAt: new Date(),
+        acceptedAt: now,
       })
       .onConflictDoNothing()
       .returning();
@@ -627,6 +704,7 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
         and(
           eq(seatReservations.cohortId, fallback.id),
           eq(seatReservations.status, "active"),
+          or(isNull(seatReservations.expiresAt), gt(seatReservations.expiresAt, now)),
         ),
       );
     const decision = reserveSeat({
@@ -644,12 +722,12 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
         userId: member.userId,
         status: decision === "reserved" ? "active" : "waitlisted",
         proposedStartsAt: fallback.startsAt,
-        expiresAt: fallback.registrationDeadlineAt,
+        expiresAt: fallback.status === "threshold_met" ? null : fallback.registrationDeadlineAt,
       })
       .returning();
     await tx
       .update(seatReservations)
-      .set({ status: "moved", fallbackReservationId: created.id, updatedAt: new Date() })
+      .set({ status: "moved", fallbackReservationId: created.id, updatedAt: now })
       .where(eq(seatReservations.id, originalReservation.id));
     await tx
       .insert(notificationOutbox)
@@ -664,6 +742,84 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
         ),
       })
       .onConflictDoNothing({ target: notificationOutbox.dedupeKey });
+
+    if (decision === "reserved") {
+      const next = evaluateCohort({
+        status: fallback.status,
+        minimumEnrollment: fallback.minimumEnrollment,
+        activeReservations: activeReservations + 1,
+        registrationDeadlineAt: fallback.registrationDeadlineAt,
+        thresholdReachedAt: fallback.thresholdReachedAt,
+        now,
+      });
+      if (next.status === "threshold_met" && fallback.status !== "threshold_met") {
+        await tx
+          .update(cohorts)
+          .set({
+            status: "threshold_met",
+            thresholdReachedAt: next.thresholdReachedAt,
+            updatedAt: now,
+          })
+          .where(eq(cohorts.id, fallback.id));
+        await tx
+          .update(seatReservations)
+          .set({ expiresAt: null, updatedAt: now })
+          .where(
+            and(
+              eq(seatReservations.cohortId, fallback.id),
+              eq(seatReservations.status, "active"),
+            ),
+          );
+        await tx.insert(cohortStatusHistory).values({
+          cohortId: fallback.id,
+          fromStatus: fallback.status,
+          toStatus: "threshold_met",
+          reason: "fallback_reservation_reached_threshold",
+        });
+
+        const thresholdRecipients = await tx
+          .select({ userId: seatReservations.userId, email: profiles.email })
+          .from(seatReservations)
+          .innerJoin(profiles, eq(profiles.userId, seatReservations.userId))
+          .where(
+            and(
+              eq(seatReservations.cohortId, fallback.id),
+              eq(seatReservations.status, "active"),
+            ),
+          );
+        const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL;
+        if (adminEmail) {
+          await tx
+            .insert(notificationOutbox)
+            .values({
+              type: "threshold_met_admin",
+              recipientEmail: adminEmail,
+              dedupeKey: `threshold-met-admin:${fallback.id}`,
+              payload: notificationPayload(
+                adminEmail,
+                "รุ่นเรียนถึงจำนวนขั้นต่ำแล้ว",
+                `${fallback.title} ถึงเกณฑ์แล้ว กรุณาตรวจตาราง ผู้สอน และต้นทุนก่อนยืนยันเปิดคลาส`,
+              ),
+            })
+            .onConflictDoNothing({ target: notificationOutbox.dedupeKey });
+        }
+        for (const recipient of thresholdRecipients) {
+          await tx
+            .insert(notificationOutbox)
+            .values({
+              type: "threshold_met_learner",
+              recipientEmail: recipient.email,
+              dedupeKey: `threshold-met-learner:${fallback.id}:${recipient.userId}`,
+              payload: notificationPayload(
+                recipient.email,
+                "รุ่นเรียนถึงจำนวนขั้นต่ำแล้ว",
+                `${fallback.title} ถึงเกณฑ์แล้ว ขณะนี้กำลังรอทีมงานยืนยันเปิดคลาส`,
+              ),
+            })
+            .onConflictDoNothing({ target: notificationOutbox.dedupeKey });
+        }
+      }
+    }
     return { changed: true, reservationId: created.id, status: created.status };
   });
 }

@@ -69,6 +69,15 @@ export async function issueCertificateByAdmin(rawEnrollmentId: string) {
   const enrollmentId = uuidSchema.parse(rawEnrollmentId);
   const admin = await requireAdmin();
 
+  return issueCertificateForCompletedEnrollment(enrollmentId, admin.userId);
+}
+
+export async function issueCertificateForCompletedEnrollment(
+  rawEnrollmentId: string,
+  actorUserId: string | null = null,
+) {
+  const enrollmentId = uuidSchema.parse(rawEnrollmentId);
+
   const certificate = await getDb().transaction(async (tx) => {
     const [snapshot] = await tx
       .select({
@@ -120,7 +129,7 @@ export async function issueCertificateByAdmin(rawEnrollmentId: string) {
       })
       .returning();
     await tx.insert(auditLogs).values({
-      actorUserId: admin.userId,
+      actorUserId,
       action: "certificate.issue",
       entityType: "certificate",
       entityId: created.id,

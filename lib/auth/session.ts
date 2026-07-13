@@ -33,14 +33,7 @@ export async function getCurrentMember(): Promise<AppMember | null> {
   }
 
   if (!hasDatabaseConnection()) {
-    return {
-      userId: data.user.id,
-      email: data.user.email,
-      displayName: data.user.name || data.user.email,
-      role: "student",
-      emailVerified: data.user.emailVerified,
-      demo: false,
-    };
+    return null;
   }
 
   const [profile] = await getDb()

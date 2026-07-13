@@ -2,12 +2,65 @@ name: Migrate production database
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type MIGRATE_PRODUCTION
+        required: true
+        type: string
+      approved_commit:
+        description: Exact main commit SHA reviewed for migration
+        required: true
+        type: string
 
 permissions:
   contents: read
+  actions: read
+
+concurrency:
+  group: production-database-migration
+  cancel-in-progress: false
 
 jobs:
-  migrate:
+  preview-schema-diff:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'MIGRATE_PRODUCTION' && inputs.approved_commit == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL_UNPOOLED: ${{ secrets.PREVIEW_DATABASE_URL_UNPOOLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci
+      - run: npm run db:check
+      - run: npm run db:safety
+      - name: Capture Preview schema before migration
+        run: pg_dump "$DATABASE_URL_UNPOOLED" --schema-only --no-owner --no-privileges > schema-before.sql
+      - name: Apply migration to isolated Preview branch
+        run: npm run db:migrate
+      - name: Capture and diff Preview schema
+        shell: bash
+        run: |
+          pg_dump "$DATABASE_URL_UNPOOLED" --schema-only --no-owner --no-privileges > schema-after.sql
+          diff -u schema-before.sql schema-after.sql > schema-diff.patch || test $? -eq 1
+          test -s schema-after.sql
+      - name: Preview migration smoke test
+        run: psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -c "select count(*) from information_schema.tables where table_schema = 'public';"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: schema-diff-${{ github.sha }}
+          path: |
+            schema-before.sql
+            schema-after.sql
+            schema-diff.patch
+          retention-days: 30
+
+  migrate-production:
+    needs: preview-schema-diff
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -15,11 +68,14 @@ jobs:
       DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22.13.0
           cache: npm
       - run: npm ci
       - run: npm run db:check
-      - name: Apply approved migrations
+      - run: npm run db:safety
+      - name: Apply approved migrations to Production
         run: npm run db:migrate

@@ -3,8 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CalendarBlank, ChartBar, PlayCircle } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/app-shell";
+import { LearnerReservations } from "@/components/learner-reservations";
 import { getCurrentMember } from "@/lib/auth/session";
-import { getLearnerEnrollments } from "@/lib/data/read-model";
+import { getLearnerEnrollments, getLearnerReservations } from "@/lib/data/read-model";
 
 export const metadata: Metadata = { title: "การเรียนของฉัน" };
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ export const dynamic = "force-dynamic";
 export default async function LearnPage() {
   const member = await getCurrentMember();
   if (!member) redirect("/auth/sign-in?next=/learn");
-  const enrollments = await getLearnerEnrollments(member.userId, member.demo);
+  const [enrollments, reservations] = await Promise.all([
+    getLearnerEnrollments(member.userId, member.demo),
+    getLearnerReservations(member.userId, member.demo),
+  ]);
 
   return (
     <AppShell active="learn">
@@ -31,6 +35,7 @@ export default async function LearnPage() {
             </article>
           ))}
         </div>
+        <LearnerReservations reservations={reservations} />
       </main>
     </AppShell>
   );

@@ -2,7 +2,11 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { notificationOutbox } from "@/db/schema";
 import { createGmailProvider } from "./gmail";
-import { MAX_NOTIFICATION_ATTEMPTS, nextRetryAt } from "./outbox-policy";
+import {
+  MAX_NOTIFICATION_ATTEMPTS,
+  OUTBOX_STALE_LOCK_MS,
+  nextRetryAt,
+} from "./outbox-policy";
 import type { EmailMessage, EmailProvider } from "./provider";
 
 type ClaimedNotification = {
@@ -37,10 +41,15 @@ async function claimBatch(limit: number): Promise<ClaimedNotification[]> {
       with picked as (
         select id
         from notification_outbox
-        where status in ('pending', 'failed')
-          and attempts < ${MAX_NOTIFICATION_ATTEMPTS}
+        where attempts < ${MAX_NOTIFICATION_ATTEMPTS}
           and scheduled_at <= now()
-          and (locked_at is null or locked_at < now() - interval '10 minutes')
+          and (
+            status in ('pending', 'failed')
+            or (
+              status = 'processing'
+              and locked_at <= now() - (${OUTBOX_STALE_LOCK_MS} * interval '1 millisecond')
+            )
+          )
         order by scheduled_at asc
         for update skip locked
         limit ${limit}

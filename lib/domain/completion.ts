@@ -10,6 +10,42 @@ type CompletionInput = {
   adminApproved?: boolean;
 };
 
+export function summarizeCompletionEvidence(input: {
+  requiredLessonProgress: number[];
+  attendancePercents: number[];
+  requiredAssignments: Array<{ score: number | null; passingScore: number }>;
+}) {
+  const requiredLessonsCompleted = input.requiredLessonProgress.filter(
+    (progress) => boundedPercent(progress) === 100,
+  ).length;
+  const attendancePercent =
+    input.attendancePercents.length === 0
+      ? 100
+      : Math.round(
+          input.attendancePercents.reduce((sum, value) => sum + boundedPercent(value), 0) /
+            input.attendancePercents.length,
+        );
+  const assignmentPassPercent =
+    input.requiredAssignments.length === 0
+      ? 100
+      : Math.round(
+          (input.requiredAssignments.filter(
+            (assignment) =>
+              assignment.score !== null &&
+              boundedPercent(assignment.score) >= boundedPercent(assignment.passingScore),
+          ).length /
+            input.requiredAssignments.length) *
+            100,
+        );
+
+  return {
+    requiredLessonsCompleted,
+    totalRequiredLessons: input.requiredLessonProgress.length,
+    attendancePercent,
+    assignmentPassPercent,
+  };
+}
+
 export type CompletionEvaluation = {
   status: CompletionStatus;
   lessonCompletionPercent: number;

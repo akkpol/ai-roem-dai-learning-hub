@@ -24,6 +24,16 @@ export type CohortEvaluation = {
   postponedAt: Date | null;
 };
 
+export function getReservationWindowState(input: {
+  registrationOpensAt: Date;
+  registrationDeadlineAt: Date;
+  now: Date;
+}): "not_open" | "open" | "closed" {
+  if (input.now.getTime() < input.registrationOpensAt.getTime()) return "not_open";
+  if (input.now.getTime() >= input.registrationDeadlineAt.getTime()) return "closed";
+  return "open";
+}
+
 const terminalOrCommittedStatuses: CohortStatus[] = [
   "confirmed",
   "in_progress",
@@ -47,21 +57,24 @@ export function evaluateCohort(input: EvaluationInput): CohortEvaluation {
     };
   }
 
+  if (
+    input.status === "collecting" &&
+    input.now.getTime() >= input.registrationDeadlineAt.getTime()
+  ) {
+    return {
+      status: "postponed",
+      remainingToThreshold,
+      thresholdReachedAt: null,
+      postponedAt: input.now,
+    };
+  }
+
   if (input.activeReservations >= input.minimumEnrollment) {
     return {
       status: "threshold_met",
       remainingToThreshold: 0,
       thresholdReachedAt: input.thresholdReachedAt ?? input.now,
       postponedAt: null,
-    };
-  }
-
-  if (input.now.getTime() >= input.registrationDeadlineAt.getTime()) {
-    return {
-      status: "postponed",
-      remainingToThreshold,
-      thresholdReachedAt: null,
-      postponedAt: input.now,
     };
   }
 

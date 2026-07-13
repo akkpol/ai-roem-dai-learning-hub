@@ -64,22 +64,29 @@ export function CohortReservationCard({
         {cohort.waitlistedReservations > 0 && <div><dt>รายชื่อสำรอง</dt><dd>{cohort.waitlistedReservations} คน</dd></div>}
       </dl>
       <p className="reservation-disclaimer">การจองนี้ยังไม่ใช่การยืนยันเปิดคลาสและไม่มีค่าใช้จ่าย</p>
-      {displayStatus === "collecting" && (
+      {(displayStatus === "collecting" || displayStatus === "threshold_met") && (
         demo ? (
           <button className="primary-cta" type="button" disabled={demoReserved} onClick={() => setDemoReserved(true)}>
-            {demoReserved ? "รับคำจองแล้ว" : "จองวันที่นี้"}
+            {demoReserved
+              ? "รับคำจองแล้ว"
+              : displayStatus === "threshold_met"
+                ? "จองเพิ่มหรือเข้ารายชื่อสำรอง"
+                : "จองวันที่นี้"}
           </button>
         ) : (
           <form action={formAction}>
             <input type="hidden" name="cohortId" value={cohort.id} />
             <input type="hidden" name="courseSlug" value={courseSlug} />
             <button className="primary-cta" type="submit" disabled={pending}>
-              {pending ? "กำลังตรวจสิทธิ์…" : "จองวันที่นี้"}
+              {pending
+                ? "กำลังตรวจสิทธิ์…"
+                : displayStatus === "threshold_met"
+                  ? "จองเพิ่มหรือเข้ารายชื่อสำรอง"
+                  : "จองวันที่นี้"}
             </button>
           </form>
         )
       )}
-      {displayStatus === "threshold_met" && <button className="primary-cta" type="button" disabled>รอทีมงานยืนยัน</button>}
       {displayStatus === "confirmed" && <LinkLike href="/learn">ไปที่การเรียนของฉัน</LinkLike>}
       {displayStatus === "postponed" && (demo ? <button className="primary-cta" type="button" onClick={() => setDemoReserved(true)}>ยืนยันย้ายไปรุ่นใหม่</button> : <form action={fallbackAction}><input type="hidden" name="cohortId" value={cohort.id} /><button className="primary-cta" type="submit" disabled={fallbackPending}>{fallbackPending ? "กำลังยืนยัน…" : "ยืนยันย้ายไปรุ่นใหม่"}</button></form>)}
       {(actionState.message || demoReserved) && (

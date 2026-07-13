@@ -17,6 +17,108 @@
   --shadow-soft: 0 8px 28px rgb(25 38 58 / 6%);
 }
 
+/* Closed Beta operational controls */
+.pending-reservations,
+.admin-operations {
+  margin-top: 2.5rem;
+}
+
+.reservation-summary-card .primary-cta {
+  margin-top: 1rem;
+}
+
+.admin-control-panel,
+.admin-operation-grid > details {
+  border: 1px solid var(--border, #d8d0c1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  padding: 0.85rem;
+}
+
+.admin-control-panel {
+  margin-top: 1rem;
+}
+
+.admin-control-panel summary,
+.admin-operation-grid summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-operation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.admin-stack-form {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.admin-stack-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--navy, #15243f);
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.admin-stack-form input,
+.admin-stack-form select,
+.admin-stack-form textarea,
+.admin-inline-form select,
+.admin-inline-form input {
+  min-height: 42px;
+  border: 1px solid var(--border, #d8d0c1);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--navy, #15243f);
+  padding: 0.6rem 0.7rem;
+}
+
+.admin-stack-form textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.admin-stack-form button,
+.admin-inline-form button,
+.admin-row-actions button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--navy, #15243f);
+  color: #fff;
+  cursor: pointer;
+  padding: 0.55rem 0.8rem;
+  font-weight: 700;
+}
+
+.danger-form button {
+  background: #8e2f2f;
+}
+
+.admin-row-actions {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.admin-row-actions form {
+  margin: 0;
+}
+
+.empty-note {
+  padding: 1rem;
+}
+
+@media (max-width: 780px) {
+  .admin-operation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 * {
   box-sizing: border-box;
 }

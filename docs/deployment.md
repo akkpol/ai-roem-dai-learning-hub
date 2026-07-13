@@ -69,7 +69,9 @@ workflow นี้ห้ามรันอัตโนมัติจาก `pul
 candidate checkout ใช้เป็น inert migration data เท่านั้น ส่วน dependency, safety tooling, seed และ
 smoke script มาจาก trusted `main` เพื่อไม่ให้โค้ดใน PR ได้รับ Neon secrets การเข้าถึง protected
 Preview ใช้ Vercel Trusted Sources กับ GitHub OIDC อายุสั้น โดยจำกัดที่ repository นี้,
-`provider-preview.yml`, branch `main` และ environment `preview` ห้ามสร้างหรือเก็บ
+workflow claim `Provider Preview Gate`, branch `main` และ environment `preview` โดยช่อง
+Workflow ใน Vercel ต้องใช้ค่า `name:` ของ GitHub Actions workflow ไม่ใช่ชื่อไฟล์
+`provider-preview.yml` ห้ามสร้างหรือเก็บ
 `VERCEL_AUTOMATION_BYPASS_SECRET` แบบระยะยาว
 
 ## 3. Connection roles

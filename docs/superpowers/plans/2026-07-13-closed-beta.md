@@ -132,7 +132,7 @@
 - Create: `docs/deployment.md`, `docs/restore-drill.md`, `.github/workflows/ci.yml`
 
 **Interfaces:**
-- Documents the account-side boundary for Neon password rotation, `npx neon@latest init`, Vercel integration, preview DB branching, OAuth/SMTP setup, production approval, backup, and restore drill.
+- Documents the account-side boundary for Neon password rotation, `npx neonctl@latest init`, Vercel integration, preview DB branching, OAuth/SMTP setup, production approval, backup, and restore drill.
 
 - [x] Document secret rotation before any remote use and do not store or print the old connection string.
 - [x] Add CI gates for lint, type-check, tests, migration generation check, and production build; keep migrations outside build.

@@ -23,10 +23,10 @@ order by table_schema, table_name;
 หลัง rotate secret และล็อกอิน Neon account ที่ถูกต้องแล้ว ให้รันจาก root ของ repoเพียงครั้งเดียว:
 
 ```bash
-npx neon@latest init
+npx neonctl@latest init
 ```
 
-ใช้ `neon` ไม่ใช่ `neonctl` สำหรับ init รุ่นปัจจุบัน ตรวจไฟล์ที่ CLI สร้างก่อน commit และอย่า commit API key
+ใช้ `neonctl` สำหรับ init ตาม Neon CLI รุ่นปัจจุบัน ตรวจไฟล์ที่ CLI สร้างก่อน commit และอย่า commit API key
 
 ## 2. Vercel project
 

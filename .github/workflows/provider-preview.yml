@@ -1,0 +1,36 @@
+name: Provider Preview Gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-preview-database
+  cancel-in-progress: false
+
+jobs:
+  provider-preview:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.PREVIEW_DATABASE_URL }}
+      DATABASE_URL_UNPOOLED: ${{ secrets.PREVIEW_DATABASE_URL_UNPOOLED }}
+      NEON_AUTH_BASE_URL: ${{ vars.PREVIEW_NEON_AUTH_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - run: npm ci
+      - run: npm run db:check
+      - run: npm run db:safety
+      - name: Apply migrations to the isolated Neon Preview branch
+        run: npm run db:migrate
+      - name: Verify Neon Preview providers and least-privilege runtime role
+        run: npm run test:provider

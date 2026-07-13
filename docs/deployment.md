@@ -37,13 +37,31 @@ npx neonctl@latest init
 - Region: `sin1` ถูกกำหนดใน `vercel.json`
 - เชื่อม Git repository และเปิด Production Branch Protection
 
-ติดตั้ง Neon-Managed Vercel Integration จาก Neon และกำหนด:
+Closed Beta ปัจจุบันใช้ official manual connection เพื่อให้เลือก `production` และ `preview`
+branch/role ได้ชัดเจน และไม่สร้าง Neon project ซ้ำ:
 
 - Production environment → production database branch
 - Preview environment → database branch แยกจาก production
-- Development environment → development branch หรือ local-only connection
+- Development environment → local-only connection
 
 อย่าแชร์ branch ระหว่าง Production กับ Preview
+
+หากเปิด Neon-Managed Integration ภายหลัง ให้ทำผ่าน Neon Console → Integrations → Vercel
+แล้วเลือก **Link Existing Neon Account** เท่านั้น ก่อนเชื่อมให้ลบตัวแปร `DATABASE_URL` ที่ตั้งเอง
+เพื่อป้องกัน environment conflict ห้ามใช้ `vercel integration add neon` สำหรับงานนี้ เพราะคำสั่ง CLI
+ดังกล่าวมีหน้าที่ provision Marketplace resource ใหม่ ไม่ใช่ผูก Neon project เดิม
+
+ค่าที่ใช้กับ Closed Beta นี้:
+
+- Neon project: `ai-roem-dai-learning-hub` (`raspy-feather-85795196`)
+- Production branch: `production`
+- Persistent provider-test branch: `preview`
+- Migration role: `neondb_owner` (direct connection, GitHub Actions secret เท่านั้น)
+- Runtime role: `app_runtime` (pooled connection, ไม่มีสิทธิ์ `CREATE` บน schema `public`)
+
+ทุก PR จาก repository นี้ต้องผ่าน `.github/workflows/provider-preview.yml` ซึ่งลง migration บน
+branch `preview` และตรวจ PostgreSQL version, migration journal, ตารางสำคัญ, runtime grants,
+transactional write/rollback และ Neon Auth JWKS ก่อน merge
 
 ## 3. Connection roles
 
@@ -90,6 +108,10 @@ Cron ใน `vercel.json`:
 
 - `/api/cron/cohort-deadlines` ตรวจ reminder และ postpone แบบ idempotent
 - `/api/cron/notifications` claim outbox ด้วย row lock และส่งอีเมล
+
+Vercel Hobby จำกัดแต่ละ cron ให้รันได้วันละครั้ง จึงตั้ง Vercel Cron ทั้งสามงานเป็น daily safety run
+และใช้ `.github/workflows/scheduled-notifications.yml` เรียก notification outbox ทุก 30 นาที
+ด้วย `CRON_SECRET` เดียวกัน เมื่ออัปเกรด Vercel Pro จึงค่อยย้ายความถี่กลับมาไว้ที่ Vercel Cron
 
 Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทดสอบการรันซ้ำว่าไม่มี notification ซ้ำ
 

@@ -168,6 +168,81 @@ describe.skipIf(!runDatabaseTests)("Closed Beta database integration", () => {
     expect(sent).toEqual(["a@example.com"]);
   });
 
+  it("derives automatic completion and issues one private certificate", async () => {
+    await insertCohort(adminClient, {
+      id: COHORT_ID,
+      status: "completed",
+      opensAt: "2026-01-01T00:00:00Z",
+      deadlineAt: "2026-01-02T00:00:00Z",
+      startsAt: "2026-01-10T00:00:00Z",
+      minimum: 1,
+      maximum: 2,
+    });
+    const invite = await insertInvite(adminClient, COHORT_ID, "a@example.com");
+    const reservation = await adminClient.query(
+      `insert into seat_reservations (cohort_id, invite_id, user_id, status, proposed_starts_at, converted_at)
+       values ($1, $2, 'user-a', 'converted', '2026-01-10', now()) returning id`,
+      [COHORT_ID, invite],
+    );
+    const enrollment = await adminClient.query(
+      `insert into enrollments (user_id, cohort_id, reservation_id)
+       values ('user-a', $1, $2) returning id`,
+      [COHORT_ID, reservation.rows[0].id],
+    );
+    const enrollmentId = enrollment.rows[0].id as string;
+    const lesson = await adminClient.query(
+      `insert into lessons (course_id, title, kind, sort_order, required)
+       values ($1, 'Required lesson', 'video', 1, true) returning id`,
+      [COURSE_ID],
+    );
+    await adminClient.query(
+      `insert into lesson_progress (enrollment_id, lesson_id, progress_percent, completed_at)
+       values ($1, $2, 100, now())`,
+      [enrollmentId, lesson.rows[0].id],
+    );
+    const liveSession = await adminClient.query(
+      `insert into live_sessions (cohort_id, title, starts_at)
+       values ($1, 'Live session', '2026-01-10') returning id`,
+      [COHORT_ID],
+    );
+    await adminClient.query(
+      `insert into session_attendance (enrollment_id, live_session_id, attendance_percent, recorded_by_user_id)
+       values ($1, $2, 80, 'admin')`,
+      [enrollmentId, liveSession.rows[0].id],
+    );
+    const assignment = await adminClient.query(
+      `insert into assignments (course_id, title, instructions, passing_score, required)
+       values ($1, 'Required assignment', 'Do the work', 70, true) returning id`,
+      [COURSE_ID],
+    );
+    await adminClient.query(
+      `insert into submissions (assignment_id, enrollment_id, status, score, submitted_at, reviewed_at)
+       values ($1, $2, 'approved', 70, now(), now())`,
+      [assignment.rows[0].id, enrollmentId],
+    );
+    const { processEnrollmentCompletions } = await import("@/lib/services/completions");
+
+    const result = await processEnrollmentCompletions();
+    const completion = await adminClient.query(
+      "select status, lesson_completion_percent, attendance_percent, assignment_pass_percent from enrollment_completions where enrollment_id = $1",
+      [enrollmentId],
+    );
+    const certificate = await adminClient.query(
+      "select public_verification_enabled from certificates where enrollment_id = $1",
+      [enrollmentId],
+    );
+    expect(result.completed).toBe(1);
+    expect(completion.rows).toEqual([
+      {
+        status: "completed",
+        lesson_completion_percent: 100,
+        attendance_percent: 80,
+        assignment_pass_percent: 100,
+      },
+    ]);
+    expect(certificate.rows).toEqual([{ public_verification_enabled: false }]);
+  });
+
   it("enforces one active reservation per learner and cohort", async () => {
     await insertCohort(adminClient, {
       id: COHORT_ID,

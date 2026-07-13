@@ -48,7 +48,7 @@ async function refreshEnrollmentCompletion(input: {
         eq(enrollmentCompletions.enrollmentId, enrollments.id),
       )
       .where(eq(enrollments.id, enrollmentId))
-      .for("update")
+      .for("update", { of: enrollments })
       .limit(1);
     if (!enrollment) throw new Error("ไม่พบ enrollment ที่ต้องการคำนวณ");
 

@@ -1,0 +1,123 @@
+# Vercel + Neon deployment runbook
+
+## 0. Security gate ก่อนเชื่อมระบบ
+
+1. เข้า Neon Console แล้ว rotate รหัสผ่าน role ที่เคยส่งผ่านแชต
+2. ยกเลิก connection string เดิมและตรวจ active connections
+3. ห้ามคัดลอก secret เดิมเข้า `.env.local`, Vercel หรือ GitHub
+4. สร้าง database/branch ใหม่ แล้วตรวจว่าไม่มี application tables ก่อน migration
+
+คำสั่งตรวจฐานว่างด้วย direct owner URL:
+
+```sql
+select table_schema, table_name
+from information_schema.tables
+where table_schema not in ('pg_catalog', 'information_schema')
+order by table_schema, table_name;
+```
+
+ถ้าพบตารางที่ไม่ได้คาดไว้ ให้หยุดและตรวจ branch/project ก่อน ห้ามลง baseline ทับ
+
+## 1. Neon CLI และ project linking
+
+หลัง rotate secret และล็อกอิน Neon account ที่ถูกต้องแล้ว ให้รันจาก root ของ repoเพียงครั้งเดียว:
+
+```bash
+npx neon@latest init
+```
+
+ใช้ `neon` ไม่ใช่ `neonctl` สำหรับ init รุ่นปัจจุบัน ตรวจไฟล์ที่ CLI สร้างก่อน commit และอย่า commit API key
+
+## 2. Vercel project
+
+- Team: `AK3Lab`
+- Project: `ai-roem-dai-learning-hub`
+- Framework: Next.js
+- Production URL: URL `*.vercel.app` ของ project นี้
+- Region: `sin1` ถูกกำหนดใน `vercel.json`
+- เชื่อม Git repository และเปิด Production Branch Protection
+
+ติดตั้ง Neon-Managed Vercel Integration จาก Neon และกำหนด:
+
+- Production environment → production database branch
+- Preview environment → database branch แยกจาก production
+- Development environment → development branch หรือ local-only connection
+
+อย่าแชร์ branch ระหว่าง Production กับ Preview
+
+## 3. Connection roles
+
+Environment variables:
+
+- `DATABASE_URL`: pooled runtime role; มีเฉพาะ connect/usage/select/insert/update/delete และ sequence usage
+- `DATABASE_URL_UNPOOLED`: owner/direct URL; ใช้เฉพาะ migration workflow ที่มี approval
+
+Runtime role ต้องไม่มี `CREATE`, `ALTER`, `DROP` หรือ ownership บน application schema ตรวจด้วย:
+
+```sql
+select current_user;
+select has_schema_privilege(current_user, 'public', 'create');
+```
+
+ค่าที่สองของ runtime role ต้องเป็น `false`
+
+## 4. Neon Auth
+
+เปิด Neon Auth แล้วตั้งค่า Email OTP และ Google OAuth จากนั้นเพิ่ม:
+
+- `NEON_AUTH_BASE_URL`
+- `NEON_AUTH_COOKIE_SECRET` อย่างน้อย 32 ตัวอักษร
+- `BOOTSTRAP_ADMIN_EMAIL` สำหรับ admin คนแรก
+- `NEXT_PUBLIC_APP_URL` เป็น production `https://*.vercel.app`
+
+Production trusted origins ต้องมีเฉพาะ production URL และ OAuth callback ที่ Neon แสดง ปิด `localhost` ใน Production แต่เก็บไว้ใน Development เท่านั้น
+
+## 5. Gmail SMTP
+
+1. ใช้ Gmail account เฉพาะระบบ
+2. เปิด 2FA
+3. สร้าง App Password สำหรับ SMTP
+4. ตั้ง `GMAIL_SMTP_USER`, `GMAIL_SMTP_APP_PASSWORD`, `EMAIL_FROM`, `ADMIN_NOTIFICATION_EMAIL` ใน Vercel
+5. ห้ามใช้รหัสผ่าน Gmail หลัก
+
+ทดสอบ invitation, deadline reminder และ confirmed email ใน Preview ก่อน Production
+
+## 6. Vercel Blob และ Cron
+
+เชื่อม private Blob store แล้วตั้ง `BLOB_READ_WRITE_TOKEN`/`BLOB_STORE_ID` ตาม integration ใส่ `CRON_SECRET` ที่สุ่มอย่างน้อย 32 bytes
+
+Cron ใน `vercel.json`:
+
+- `/api/cron/cohort-deadlines` ตรวจ reminder และ postpone แบบ idempotent
+- `/api/cron/notifications` claim outbox ด้วย row lock และส่งอีเมล
+
+Cron ต้องส่ง `Authorization: Bearer <CRON_SECRET>` และทดสอบการรันซ้ำว่าไม่มี notification ซ้ำ
+
+## 7. Migration policy
+
+Preview:
+
+1. สร้าง Preview database branch
+2. รัน `npm run db:check`
+3. ตรวจ schema diff และ baseline SQL ว่าไม่มี destructive statement ที่ไม่ตั้งใจ
+4. รัน `DATABASE_URL_UNPOOLED=<preview-direct-url> npm run db:migrate`
+5. รัน smoke flow บน Vercel Preview
+
+Production:
+
+1. PR ผ่าน CI และ Preview smoke test
+2. Review schema diff
+3. ขอ approval ผ่าน GitHub Environment `production`
+4. รัน workflow `Migrate production database`
+5. Deploy application หลัง migration สำเร็จ
+
+ห้ามเพิ่ม `db:migrate` ใน `build`, `postinstall` หรือ Vercel Build Command
+
+## 8. Monitoring และ security
+
+- เปิด Neon restore history และกำหนด retention ตาม plan ที่เลือก
+- เก็บ pre-migration snapshot ทุก production migration
+- ทำ restore drill ตาม `docs/restore-drill.md`
+- Review weekly scorecard ที่ `/admin/analytics`
+- ติดตาม OTP/email failure, unauthorized access, protected access failure และ certificate generation failure
+- ปัจจุบัน dependency tree อาจรายงาน advisory ระดับ moderate จาก PostCSS ใน Next.js และ esbuild ในเครื่องมือ Drizzle ให้ติดตาม upstream patch และอัปเดตแบบไม่ breaking เท่านั้น ห้าม `npm audit fix --force`

@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import {
+  openCohortRegistrationAction,
   setFallbackCohortAction,
   updateCohortAction,
   type AdminOperationState,
@@ -12,12 +13,13 @@ import {
   type CohortActionState,
 } from "@/app/actions/cohorts";
 import type { CohortCard } from "@/lib/data/read-model";
+import { formatBangkokDateTime } from "@/lib/domain/datetime";
 
 const initialState: CohortActionState = { ok: false, message: "" };
 const initialOperationState: AdminOperationState = { ok: false, message: "" };
 
 function dateTimeValue(value: Date) {
-  return new Date(value).toISOString().slice(0, 16);
+  return formatBangkokDateTime(new Date(value));
 }
 
 function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; demo: boolean; allCohorts: CohortCard[] }) {
@@ -25,6 +27,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
   const [cancelState, cancelAction, cancelling] = useActionState(cancelCohortAction, initialState);
   const [editState, editAction, editing] = useActionState(updateCohortAction, initialOperationState);
   const [fallbackState, fallbackAction, fallbackPending] = useActionState(setFallbackCohortAction, initialOperationState);
+  const [openState, openAction, opening] = useActionState(openCohortRegistrationAction, initialOperationState);
   const [demoConfirmed, setDemoConfirmed] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [demoMessage, setDemoMessage] = useState("");
@@ -43,6 +46,12 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
       <div className="threshold-track"><span style={{ width: `${Math.min(100, (cohort.activeReservations / cohort.minimumEnrollment) * 100)}%` }} /></div>
       <p>เริ่ม {cohort.startsAt.toLocaleDateString("th-TH", { dateStyle: "medium", timeZone: "Asia/Bangkok" })} · สูงสุด {cohort.maximumEnrollment} คน</p>
       {cohort.waitlistedReservations > 0 && <p>Waiting list {cohort.waitlistedReservations} คน</p>}
+      {status === "draft" && (
+        <form action={openAction} onSubmit={demo ? (event) => { event.preventDefault(); setDemoMessage("เปิดรับคำจองในโหมดตัวอย่างแล้ว"); } : undefined} className="admin-inline-form">
+          <input type="hidden" name="cohortId" value={cohort.id} />
+          <button type="submit" disabled={opening}>{opening ? "กำลังเปิดรับ…" : "เปิดรับคำจอง"}</button>
+        </form>
+      )}
       {(status === "threshold_met" || status === "collecting") && (
         demo ? (
           <div className="admin-inline-form">
@@ -77,7 +86,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
           <input type="hidden" name="cohortId" value={cohort.id} />
           <select name="fallbackCohortId" defaultValue={cohort.fallbackCohortId ?? ""} required aria-label="รุ่นถัดไป">
             <option value="">เลือกรุ่นถัดไป</option>
-            {allCohorts.filter((candidate) => candidate.id !== cohort.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
+            {allCohorts.filter((candidate) => candidate.id !== cohort.id && candidate.courseId === cohort.courseId).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.title}</option>)}
           </select>
           <button type="submit" disabled={fallbackPending}>{fallbackPending ? "กำลังบันทึก…" : "กำหนดรุ่นถัดไป"}</button>
         </form>
@@ -89,7 +98,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
           <button type="submit" disabled={cancelling}>{cancelling ? "กำลังยกเลิก…" : "ยกเลิกคลาสพร้อม audit"}</button>
         </form>
       )}
-      {(state.message || cancelState.message || editState.message || fallbackState.message || demoMessage) && <p className="action-message" data-success={state.ok || cancelState.ok || editState.ok || fallbackState.ok || Boolean(demoMessage)}>{state.message || cancelState.message || editState.message || fallbackState.message || demoMessage}</p>}
+      {(state.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage) && <p className="action-message" data-success={state.ok || cancelState.ok || editState.ok || fallbackState.ok || openState.ok || Boolean(demoMessage)}>{state.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage}</p>}
     </article>
   );
 }

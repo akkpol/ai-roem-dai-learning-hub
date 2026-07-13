@@ -10,6 +10,11 @@ import {
   type OutboxClaimCandidate,
 } from "@/lib/email/outbox-policy";
 import { canUseDemoData } from "@/lib/data/demo-policy";
+import {
+  formatBangkokDateTime,
+  parseBangkokDateTime,
+} from "@/lib/domain/datetime";
+import { assertSafeTestDatabase } from "@/lib/testing/database-safety";
 
 const opensAt = new Date("2026-07-01T00:00:00.000Z");
 const deadline = new Date("2026-07-20T00:00:00.000Z");
@@ -109,5 +114,51 @@ describe("completion evidence", () => {
       attendancePercent: 100,
       assignmentPassPercent: 100,
     });
+  });
+});
+
+describe("Bangkok admin date-time fields", () => {
+  it("round-trips a Bangkok wall-clock value without shifting it to UTC", () => {
+    const parsed = parseBangkokDateTime("2026-07-20T19:00");
+
+    expect(parsed.toISOString()).toBe("2026-07-20T12:00:00.000Z");
+    expect(formatBangkokDateTime(parsed)).toBe("2026-07-20T19:00");
+  });
+
+  it("rejects ambiguous or invalid input instead of using the server timezone", () => {
+    expect(() => parseBangkokDateTime("2026-07-20")).toThrow("วันเวลา");
+    expect(() => parseBangkokDateTime("not-a-date")).toThrow("วันเวลา");
+  });
+});
+
+describe("destructive test database guard", () => {
+  it("allows only the explicitly confirmed local closed_beta_test database", () => {
+    expect(() =>
+      assertSafeTestDatabase(
+        "postgresql://postgres:postgres@localhost:5432/closed_beta_test",
+        "closed_beta_test",
+      ),
+    ).not.toThrow();
+  });
+
+  it("rejects remote hosts, the wrong database, and missing confirmation", () => {
+    expect(() =>
+      assertSafeTestDatabase(
+        "postgresql://owner:secret@ep-example.neon.tech/closed_beta_test",
+        "closed_beta_test",
+      ),
+    ).toThrow("local");
+    expect(() =>
+      assertSafeTestDatabase(
+        "postgresql://postgres:postgres@localhost:5432/neondb",
+        "closed_beta_test",
+      ),
+    ).toThrow("closed_beta_test");
+    expect(() =>
+      assertSafeTestDatabase(
+        "postgresql://postgres:postgres@localhost:5432/closed_beta_test",
+        undefined,
+      ),
+    ).toThrow("confirmation");
   });
 });

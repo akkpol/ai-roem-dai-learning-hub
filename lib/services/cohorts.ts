@@ -28,8 +28,16 @@ function notificationPayload(to: string, subject: string, text: string) {
 }
 
 export async function reserveInvitedSeat(rawCohortId: string) {
-  const cohortId = cohortIdSchema.parse(rawCohortId);
   const member = await requireMember();
+  return reserveInvitedSeatForMember(rawCohortId, member);
+}
+
+/** Internal seam used by the service and database concurrency tests. */
+export async function reserveInvitedSeatForMember(
+  rawCohortId: string,
+  member: { userId: string; email: string; emailVerified: boolean },
+) {
+  const cohortId = cohortIdSchema.parse(rawCohortId);
   if (!member.emailVerified) {
     throw new Error("กรุณายืนยันอีเมลก่อนจองที่นั่ง");
   }
@@ -268,6 +276,7 @@ export async function confirmCohortByAdmin(input: {
         and(
           eq(seatReservations.cohortId, cohort.id),
           eq(seatReservations.status, "active"),
+          eq(seatReservations.proposedStartsAt, cohort.startsAt),
           or(
             isNull(seatReservations.expiresAt),
             gt(seatReservations.expiresAt, confirmedAt),
@@ -358,7 +367,7 @@ export async function withdrawSeatReservation(rawReservationId: string) {
         and(
           eq(seatReservations.id, reservationId),
           eq(seatReservations.userId, member.userId),
-          eq(seatReservations.status, "active"),
+          inArray(seatReservations.status, ["active", "waitlisted"]),
         ),
       )
       .for("update")
@@ -375,6 +384,15 @@ export async function withdrawSeatReservation(rawReservationId: string) {
       throw new Error("คลาสยืนยันแล้ว กรุณาติดต่อทีมงานเพื่อขอถอน enrollment");
     }
 
+    const now = new Date();
+    if (reservation.status === "waitlisted") {
+      await tx
+        .update(seatReservations)
+        .set({ status: "withdrawn", withdrawnAt: now, updatedAt: now })
+        .where(eq(seatReservations.id, reservation.id));
+      return { withdrawn: true, promotedFromWaitingList: false };
+    }
+
     const [{ value: activeBefore }] = await tx
       .select({ value: count() })
       .from(seatReservations)
@@ -384,7 +402,6 @@ export async function withdrawSeatReservation(rawReservationId: string) {
           eq(seatReservations.status, "active"),
         ),
       );
-    const now = new Date();
     await tx
       .update(seatReservations)
       .set({ status: "withdrawn", withdrawnAt: now, updatedAt: now })
@@ -637,6 +654,9 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
       .for("update")
       .limit(1);
     if (!fallback) throw new Error("ไม่พบรุ่นใหม่");
+    if (fallback.courseId !== originalCohort.courseId) {
+      throw new Error("รุ่นใหม่ต้องอยู่ในหลักสูตรเดียวกัน");
+    }
     const now = new Date();
     const fallbackWindow = getReservationWindowState({
       registrationOpensAt: fallback.registrationOpensAt,

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 import {
   acceptFallbackAction,
+  withdrawReservationAction,
   type CohortActionState,
 } from "@/app/actions/cohorts";
 import type { ReservationSummary } from "@/lib/data/read-model";
@@ -12,6 +13,7 @@ const initialState: CohortActionState = { ok: false, message: "" };
 
 function ReservationCard({ reservation }: { reservation: ReservationSummary }) {
   const [state, action, pending] = useActionState(acceptFallbackAction, initialState);
+  const [withdrawState, withdrawAction, withdrawing] = useActionState(withdrawReservationAction, initialState);
   const postponed = reservation.cohortStatus === "postponed";
 
   return (
@@ -43,9 +45,20 @@ function ReservationCard({ reservation }: { reservation: ReservationSummary }) {
           ดูรายละเอียดรุ่น
         </Link>
       )}
+      {!postponed && ["active", "waitlisted"].includes(reservation.reservationStatus) && (
+        <form action={withdrawAction}>
+          <input type="hidden" name="reservationId" value={reservation.id} />
+          <button type="submit" disabled={withdrawing}>{withdrawing ? "กำลังถอน…" : "ถอนคำจอง"}</button>
+        </form>
+      )}
       {state.message && (
         <p className="action-message" data-success={state.ok} aria-live="polite">
           {state.message}
+        </p>
+      )}
+      {withdrawState.message && (
+        <p className="action-message" data-success={withdrawState.ok} aria-live="polite">
+          {withdrawState.message}
         </p>
       )}
     </article>

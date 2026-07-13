@@ -35,6 +35,7 @@ import { canUseDemoData } from "@/lib/data/demo-policy";
 
 export type CohortCard = {
   id: string;
+  courseId: string;
   title: string;
   status:
     | "draft"
@@ -65,6 +66,7 @@ export type CourseDetail = Course & {
 const demoCohorts: CohortCard[] = [
   {
     id: "00000000-0000-4000-8000-000000000101",
+    courseId: "ai-fundamentals",
     title: "AI Fundamentals รุ่นกรกฎาคม",
     status: "collecting",
     startsAt: new Date("2026-07-27T12:00:00.000Z"),
@@ -74,11 +76,12 @@ const demoCohorts: CohortCard[] = [
     maximumEnrollment: 16,
     activeReservations: 4,
     waitlistedReservations: 0,
-    fallbackCohortId: "00000000-0000-4000-8000-000000000102",
+    fallbackCohortId: null,
     overrideReason: null,
   },
   {
     id: "00000000-0000-4000-8000-000000000102",
+    courseId: "google-gemini-workspace",
     title: "Gemini Workspace รุ่นสิงหาคม",
     status: "threshold_met",
     startsAt: new Date("2026-08-03T12:00:00.000Z"),
@@ -93,6 +96,7 @@ const demoCohorts: CohortCard[] = [
   },
   {
     id: "00000000-0000-4000-8000-000000000103",
+    courseId: "ai-data-business",
     title: "AI วิเคราะห์ข้อมูล รุ่นกรกฎาคม",
     status: "confirmed",
     startsAt: new Date("2026-07-22T12:00:00.000Z"),
@@ -137,7 +141,11 @@ function thaiLevel(level: "beginner" | "applied" | "expert") {
 }
 
 export async function getCourseDetail(slug: string): Promise<CourseDetail | null> {
-  if (!hasDatabaseConnection()) return demoCourseDetail(slug);
+  if (!hasDatabaseConnection()) {
+    return canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })
+      ? demoCourseDetail(slug)
+      : null;
+  }
 
   const db = getDb();
   const [course] = await db
@@ -176,6 +184,7 @@ export async function getCourseDetail(slug: string): Promise<CourseDetail | null
       .where(eq(seatReservations.cohortId, cohort.id));
     cohortCard = {
       id: cohort.id,
+      courseId: cohort.courseId,
       title: cohort.title,
       status: cohort.status,
       startsAt: cohort.startsAt,
@@ -330,6 +339,16 @@ export type EnrollmentDetail = EnrollmentSummary & {
     recordingUrl: string | null;
   }>;
   materials: Array<{ id: string; title: string; kind: string }>;
+  assignments: Array<{
+    id: string;
+    title: string;
+    instructions: string;
+    passingScore: number;
+    status: string | null;
+    submissionUrl: string | null;
+    score: number | null;
+    feedback: string | null;
+  }>;
   attendancePercent: number;
   assignmentPassPercent: number;
   completionStatus: string;
@@ -353,6 +372,18 @@ const demoEnrollmentDetail: EnrollmentDetail = {
   materials: [
     { id: "m1", title: "Workbook วิเคราะห์ข้อมูล", kind: "worksheet" },
     { id: "m2", title: "Checklist ตรวจคำตอบ AI", kind: "document" },
+  ],
+  assignments: [
+    {
+      id: "a1",
+      title: "สรุป workflow ที่นำไปใช้จริง",
+      instructions: "ส่งลิงก์เอกสารที่อธิบายโจทย์ วิธีใช้ AI และวิธีตรวจคำตอบ",
+      passingScore: 70,
+      status: "approved",
+      submissionUrl: "https://example.com/demo-submission",
+      score: 75,
+      feedback: "ผ่านเกณฑ์แล้ว",
+    },
   ],
   attendancePercent: 82,
   assignmentPassPercent: 75,
@@ -430,6 +461,26 @@ export async function getEnrollmentDetail(
     .select({ id: courseMaterials.id, title: courseMaterials.title, kind: courseMaterials.kind })
     .from(courseMaterials)
     .where(eq(courseMaterials.courseId, enrollment.courseId));
+  const assignmentRows = await db
+    .select({
+      id: assignments.id,
+      title: assignments.title,
+      instructions: assignments.instructions,
+      passingScore: assignments.passingScore,
+      status: submissions.status,
+      submissionUrl: submissions.submissionUrl,
+      score: submissions.score,
+      feedback: submissions.feedback,
+    })
+    .from(assignments)
+    .leftJoin(
+      submissions,
+      and(
+        eq(submissions.assignmentId, assignments.id),
+        eq(submissions.enrollmentId, enrollmentId),
+      ),
+    )
+    .where(eq(assignments.courseId, enrollment.courseId));
   const [session] = await db
     .select({
       provider: liveSessions.meetingProvider,
@@ -460,6 +511,7 @@ export async function getEnrollmentDetail(
       recordingUrl: lesson.recordingUrl ?? null,
     })),
     materials: materialRows,
+    assignments: assignmentRows,
     attendancePercent: enrollment.attendancePercent ?? 0,
     assignmentPassPercent: enrollment.assignmentPassPercent ?? 0,
     completionStatus: enrollment.completionStatus ?? "in_progress",
@@ -672,7 +724,11 @@ export async function getAdminOperationsData(): Promise<AdminOperationsData> {
 }
 
 export async function getAdminCohorts(): Promise<CohortCard[]> {
-  if (!hasDatabaseConnection()) return demoCohorts;
+  if (!hasDatabaseConnection()) {
+    return canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })
+      ? demoCohorts
+      : [];
+  }
   const rows = await getDb()
     .select({
       cohort: cohorts,
@@ -685,6 +741,7 @@ export async function getAdminCohorts(): Promise<CohortCard[]> {
     .orderBy(asc(cohorts.startsAt));
   return rows.map(({ cohort, activeReservations, waitlistedReservations }) => ({
     id: cohort.id,
+    courseId: cohort.courseId,
     title: cohort.title,
     status: cohort.status,
     startsAt: cohort.startsAt,
@@ -701,6 +758,23 @@ export async function getAdminCohorts(): Promise<CohortCard[]> {
 
 export async function getBetaScorecard() {
   if (!hasDatabaseConnection()) {
+    if (!canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })) {
+      return calculateBetaScorecard({
+        cohorts: [],
+        invitations: 0,
+        acceptedInvitations: 0,
+        reservations: 0,
+        withdrawnReservations: 0,
+        waitlistedReservations: 0,
+        promotedWaitlistReservations: 0,
+        enrollments: 0,
+        qualifiedCompletions: 0,
+        otpOrEmailFailures: 0,
+        unauthorizedAccessAttempts: 0,
+        protectedAccessFailures: 0,
+        certificateGenerationFailures: 0,
+      });
+    }
     return calculateBetaScorecard({
       cohorts: [
         {
@@ -799,10 +873,12 @@ export async function getBetaScorecard() {
 
 export async function getInviteSummary() {
   if (!hasDatabaseConnection()) {
-    return [
-      { cohortTitle: demoCohorts[0].title, invited: 18, accepted: 10, reserved: 4 },
-      { cohortTitle: demoCohorts[1].title, invited: 14, accepted: 9, reserved: 8 },
-    ];
+    return canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })
+      ? [
+          { cohortTitle: demoCohorts[0].title, invited: 18, accepted: 10, reserved: 4 },
+          { cohortTitle: demoCohorts[1].title, invited: 14, accepted: 9, reserved: 8 },
+        ]
+      : [];
   }
   return getDb()
     .select({

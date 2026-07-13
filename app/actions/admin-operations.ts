@@ -5,6 +5,7 @@ import {
   createCohortByAdmin,
   createCourseMaterialByAdmin,
   createLiveSessionByAdmin,
+  openCohortRegistrationByAdmin,
   recordAttendanceByAdmin,
   reviewSubmissionByAdmin,
   setFallbackCohortByAdmin,
@@ -62,6 +63,13 @@ export async function updateCohortAction(_previous: AdminOperationState, formDat
   );
 }
 
+export async function openCohortRegistrationAction(_previous: AdminOperationState, formData: FormData) {
+  return runAdminOperation(
+    () => openCohortRegistrationByAdmin(String(formData.get("cohortId"))),
+    "เปิดรับคำจองของรุ่นนี้แล้ว",
+  );
+}
+
 export async function setFallbackCohortAction(_previous: AdminOperationState, formData: FormData) {
   return runAdminOperation(
     () => setFallbackCohortByAdmin({ cohortId: String(formData.get("cohortId")), fallbackCohortId: String(formData.get("fallbackCohortId")) }),
@@ -77,8 +85,15 @@ export async function createLiveSessionAction(_previous: AdminOperationState, fo
 }
 
 export async function createCourseMaterialAction(_previous: AdminOperationState, formData: FormData) {
+  const file = formData.get("file");
   return runAdminOperation(
-    () => createCourseMaterialByAdmin({ courseId: String(formData.get("courseId")), title: String(formData.get("title")), kind: String(formData.get("kind")) as "document" | "worksheet" | "link", externalUrl: String(formData.get("externalUrl")) }),
+    () => createCourseMaterialByAdmin({
+      courseId: String(formData.get("courseId")),
+      title: String(formData.get("title")),
+      kind: String(formData.get("kind")) as "document" | "worksheet" | "link",
+      externalUrl: String(formData.get("externalUrl") || "") || undefined,
+      file: file instanceof File ? file : undefined,
+    }),
     "เพิ่มเอกสารประกอบแล้ว",
   );
 }

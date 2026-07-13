@@ -1,4 +1,5 @@
-import { and, eq, ne } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/db";
 import {
@@ -9,12 +10,26 @@ import {
   courses,
   enrollments,
   liveSessions,
+  seatReservations,
   sessionAttendance,
   submissions,
 } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/authorization";
+import { parseBangkokDateTime } from "@/lib/domain/datetime";
+import { putPrivateDocument } from "@/lib/storage/private-blob";
 
 const uuid = z.string().uuid();
+const bangkokDateTime = z.string().transform((value, context) => {
+  try {
+    return parseBangkokDateTime(value);
+  } catch (error) {
+    context.addIssue({
+      code: "custom",
+      message: error instanceof Error ? error.message : "วันเวลาไม่ถูกต้อง",
+    });
+    return z.NEVER;
+  }
+});
 const capacitySchema = z
   .object({
     minimumEnrollment: z.coerce.number().int().min(1).max(50),
@@ -25,10 +40,10 @@ const capacitySchema = z
   });
 const scheduleSchema = z
   .object({
-    startsAt: z.coerce.date(),
-    endsAt: z.coerce.date().optional(),
-    registrationOpensAt: z.coerce.date(),
-    registrationDeadlineAt: z.coerce.date(),
+    startsAt: bangkokDateTime,
+    endsAt: bangkokDateTime.optional(),
+    registrationOpensAt: bangkokDateTime,
+    registrationDeadlineAt: bangkokDateTime,
   })
   .refine((value) => value.registrationOpensAt <= value.registrationDeadlineAt, {
     message: "วันเปิดรับต้องไม่อยู่หลังวันปิดรับ",
@@ -94,6 +109,46 @@ export async function createCohortByAdmin(input: {
   });
 }
 
+export async function openCohortRegistrationByAdmin(rawCohortId: string) {
+  const cohortId = uuid.parse(rawCohortId);
+  const admin = await requireAdmin();
+
+  return getDb().transaction(async (tx) => {
+    const [cohort] = await tx
+      .select()
+      .from(cohorts)
+      .where(eq(cohorts.id, cohortId))
+      .for("update")
+      .limit(1);
+    if (!cohort) throw new Error("ไม่พบรุ่นเรียนนี้");
+    if (cohort.status !== "draft") throw new Error("เปิดรับได้เฉพาะรุ่นที่เป็น draft");
+    if (cohort.registrationDeadlineAt.getTime() <= Date.now()) {
+      throw new Error("วันปิดรับผ่านไปแล้ว กรุณาแก้กำหนดการก่อนเปิดรับ");
+    }
+
+    const now = new Date();
+    const [updated] = await tx
+      .update(cohorts)
+      .set({ status: "collecting", updatedAt: now })
+      .where(eq(cohorts.id, cohort.id))
+      .returning();
+    await tx.insert(cohortStatusHistory).values({
+      cohortId: cohort.id,
+      fromStatus: "draft",
+      toStatus: "collecting",
+      actorUserId: admin.userId,
+      reason: "admin_opened_registration",
+    });
+    await tx.insert(auditLogs).values({
+      actorUserId: admin.userId,
+      action: "cohort.open_registration",
+      entityType: "cohort",
+      entityId: cohort.id,
+    });
+    return updated;
+  });
+}
+
 export async function updateCohortByAdmin(input: {
   cohortId: string;
   startsAt: string;
@@ -103,13 +158,40 @@ export async function updateCohortByAdmin(input: {
   maximumEnrollment: number | string;
 }) {
   const parsed = z
-    .object({ cohortId: uuid, startsAt: z.coerce.date(), registrationOpensAt: z.coerce.date(), registrationDeadlineAt: z.coerce.date() })
+    .object({ cohortId: uuid, startsAt: bangkokDateTime, registrationOpensAt: bangkokDateTime, registrationDeadlineAt: bangkokDateTime })
     .and(capacitySchema)
     .refine((value) => value.registrationOpensAt <= value.registrationDeadlineAt, { message: "วันเปิดรับต้องไม่อยู่หลังวันปิดรับ" })
     .refine((value) => value.registrationDeadlineAt < value.startsAt, { message: "วันปิดรับต้องอยู่ก่อนวันเริ่มเรียน" })
     .parse(input);
   const admin = await requireAdmin();
   return getDb().transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(cohorts)
+      .where(eq(cohorts.id, parsed.cohortId))
+      .for("update")
+      .limit(1);
+    if (!current) throw new Error("ไม่พบรุ่นเรียนนี้");
+    if (["confirmed", "in_progress", "completed", "cancelled"].includes(current.status)) {
+      throw new Error("แก้ได้เฉพาะรุ่นที่ยังไม่ยืนยันเปิด");
+    }
+
+    if (current.startsAt.getTime() !== parsed.startsAt.getTime()) {
+      const [reservation] = await tx
+        .select({ id: seatReservations.id })
+        .from(seatReservations)
+        .where(
+          and(
+            eq(seatReservations.cohortId, current.id),
+            inArray(seatReservations.status, ["active", "waitlisted", "expired", "moved"]),
+          ),
+        )
+        .limit(1);
+      if (reservation) {
+        throw new Error("มีผู้จองแล้ว ต้องสร้างรุ่นใหม่และให้ผู้เรียนยืนยันย้ายเอง");
+      }
+    }
+
     const [updated] = await tx
       .update(cohorts)
       .set({
@@ -152,8 +234,11 @@ export async function setFallbackCohortByAdmin(input: {
   ).parse(input);
   const admin = await requireAdmin();
   return getDb().transaction(async (tx) => {
-    const [fallback] = await tx.select({ id: cohorts.id }).from(cohorts).where(eq(cohorts.id, parsed.fallbackCohortId)).limit(1);
+    const [original] = await tx.select({ id: cohorts.id, courseId: cohorts.courseId }).from(cohorts).where(eq(cohorts.id, parsed.cohortId)).limit(1);
+    if (!original) throw new Error("ไม่พบรุ่นเดิม");
+    const [fallback] = await tx.select({ id: cohorts.id, courseId: cohorts.courseId }).from(cohorts).where(eq(cohorts.id, parsed.fallbackCohortId)).limit(1);
     if (!fallback) throw new Error("ไม่พบรุ่นสำรอง");
+    if (fallback.courseId !== original.courseId) throw new Error("รุ่นสำรองต้องอยู่ในหลักสูตรเดียวกัน");
     const [updated] = await tx.update(cohorts).set({ fallbackCohortId: fallback.id, updatedAt: new Date() }).where(eq(cohorts.id, parsed.cohortId)).returning();
     if (!updated) throw new Error("ไม่พบรุ่นเดิม");
     await tx.insert(auditLogs).values({ actorUserId: admin.userId, action: "cohort.set_fallback", entityType: "cohort", entityId: updated.id, metadata: { fallbackCohortId: fallback.id } });
@@ -169,7 +254,7 @@ export async function createLiveSessionByAdmin(input: {
   meetingProvider?: string;
   meetingUrl?: string;
 }) {
-  const parsed = z.object({ cohortId: uuid, title: z.string().trim().min(3).max(200), startsAt: z.coerce.date(), endsAt: z.coerce.date().optional(), meetingProvider: z.string().trim().max(50).optional(), meetingUrl: z.string().url().optional() }).refine((value) => !value.endsAt || value.endsAt > value.startsAt, { message: "เวลาจบต้องอยู่หลังเวลาเริ่ม" }).parse(input);
+  const parsed = z.object({ cohortId: uuid, title: z.string().trim().min(3).max(200), startsAt: bangkokDateTime, endsAt: bangkokDateTime.optional(), meetingProvider: z.string().trim().max(50).optional(), meetingUrl: z.string().url().optional() }).refine((value) => !value.endsAt || value.endsAt > value.startsAt, { message: "เวลาจบต้องอยู่หลังเวลาเริ่ม" }).parse(input);
   const admin = await requireAdmin();
   return getDb().transaction(async (tx) => {
     const [created] = await tx.insert(liveSessions).values(parsed).returning();
@@ -182,12 +267,54 @@ export async function createCourseMaterialByAdmin(input: {
   courseId: string;
   title: string;
   kind: "document" | "worksheet" | "link";
-  externalUrl: string;
+  externalUrl?: string;
+  file?: File;
 }) {
-  const parsed = z.object({ courseId: uuid, title: z.string().trim().min(3).max(200), kind: z.enum(["document", "worksheet", "link"]), externalUrl: z.string().url() }).parse(input);
+  const parsed = z.object({
+    courseId: uuid,
+    title: z.string().trim().min(3).max(200),
+    kind: z.enum(["document", "worksheet", "link"]),
+    externalUrl: z.string().url().refine(
+      (value) => ["http:", "https:"].includes(new URL(value).protocol),
+      "ลิงก์ต้องเป็น http หรือ https",
+    ).optional(),
+    file: z.instanceof(File).optional(),
+  }).superRefine((value, context) => {
+    if (value.kind === "link" && !value.externalUrl) {
+      context.addIssue({ code: "custom", path: ["externalUrl"], message: "ลิงก์ต้องมี URL" });
+    }
+    if (value.kind !== "link" && (!value.file || value.file.size === 0)) {
+      context.addIssue({ code: "custom", path: ["file"], message: "เอกสารต้องมีไฟล์สำหรับเก็บแบบ private" });
+    }
+    if (value.file && value.file.size > 10 * 1024 * 1024) {
+      context.addIssue({ code: "custom", path: ["file"], message: "ไฟล์ต้องมีขนาดไม่เกิน 10 MB" });
+    }
+  }).parse(input);
   const admin = await requireAdmin();
+  const [course] = await getDb()
+    .select({ id: courses.id })
+    .from(courses)
+    .where(eq(courses.id, parsed.courseId))
+    .limit(1);
+  if (!course) throw new Error("ไม่พบหลักสูตร");
+  let blobPathname: string | undefined;
+  if (parsed.kind !== "link" && parsed.file) {
+    const safeName = parsed.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const blob = await putPrivateDocument(
+      `course-materials/${parsed.courseId}/${randomUUID()}-${safeName}`,
+      parsed.file,
+      parsed.file.type || "application/octet-stream",
+    );
+    blobPathname = blob.pathname;
+  }
   return getDb().transaction(async (tx) => {
-    const [created] = await tx.insert(courseMaterials).values(parsed).returning();
+    const [created] = await tx.insert(courseMaterials).values({
+      courseId: parsed.courseId,
+      title: parsed.title,
+      kind: parsed.kind,
+      externalUrl: parsed.kind === "link" ? parsed.externalUrl : null,
+      blobPathname: parsed.kind === "link" ? null : blobPathname,
+    }).returning();
     await tx.insert(auditLogs).values({ actorUserId: admin.userId, action: "course_material.create", entityType: "course_material", entityId: created.id });
     return created;
   });

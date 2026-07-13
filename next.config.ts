@@ -3,6 +3,9 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   devIndicators: false,
   poweredByHeader: false,
+  experimental: {
+    serverActions: { bodySizeLimit: "10mb" },
+  },
   outputFileTracingIncludes: {
     "/api/certificates/*/pdf": [
       "./node_modules/@fontsource/noto-sans-thai/files/noto-sans-thai-thai-400-normal.woff",

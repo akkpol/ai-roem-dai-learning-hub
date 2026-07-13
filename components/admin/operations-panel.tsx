@@ -32,6 +32,7 @@ export function AdminOperationsPanel({ data, demo }: { data: AdminOperationsData
   const [materialState, createMaterial, creatingMaterial] = useActionState(createCourseMaterialAction, initialState);
   const [attendanceState, recordAttendance, recordingAttendance] = useActionState(recordAttendanceAction, initialState);
   const [submissionState, reviewSubmission, reviewingSubmission] = useActionState(reviewSubmissionAction, initialState);
+  const [materialKind, setMaterialKind] = useState<"document" | "worksheet" | "link">("document");
   const cohortDemo = useDemoSubmit(demo);
   const sessionDemo = useDemoSubmit(demo);
   const materialDemo = useDemoSubmit(demo);
@@ -77,8 +78,10 @@ export function AdminOperationsPanel({ data, demo }: { data: AdminOperationsData
           <form action={createMaterial} onSubmit={materialDemo.onSubmit} className="admin-stack-form">
             <label>หลักสูตร<select name="courseId" required><option value="">เลือกหลักสูตร</option>{data.courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}</select></label>
             <label>ชื่อเอกสาร<input name="title" required /></label>
-            <label>ชนิด<select name="kind"><option value="document">Document</option><option value="worksheet">Worksheet</option><option value="link">Link</option></select></label>
-            <label>URL<input name="externalUrl" type="url" required placeholder="https://" /></label>
+            <label>ชนิด<select name="kind" value={materialKind} onChange={(event) => setMaterialKind(event.target.value as typeof materialKind)}><option value="document">Document</option><option value="worksheet">Worksheet</option><option value="link">Link</option></select></label>
+            {materialKind === "link"
+              ? <label>URL<input name="externalUrl" type="url" required placeholder="https://" /></label>
+              : <label>ไฟล์ private (สูงสุด 10 MB)<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" /></label>}
             <button type="submit" disabled={creatingMaterial}>{creatingMaterial ? "กำลังเพิ่ม…" : "เพิ่มเอกสาร"}</button>
             <OperationMessage state={materialState} demoMessage={materialDemo.message} />
           </form>

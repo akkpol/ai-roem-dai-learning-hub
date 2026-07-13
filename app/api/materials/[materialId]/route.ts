@@ -18,10 +18,15 @@ export async function GET(
 
   const { materialId } = await params;
   const [access] = await getDb()
-    .select({ pathname: courseMaterials.blobPathname, title: courseMaterials.title })
+    .select({
+      pathname: courseMaterials.blobPathname,
+      externalUrl: courseMaterials.externalUrl,
+      kind: courseMaterials.kind,
+      title: courseMaterials.title,
+    })
     .from(courseMaterials)
     .innerJoin(cohorts, eq(cohorts.courseId, courseMaterials.courseId))
-    .innerJoin(enrollments, eq(enrollments.cohortId, cohorts.id))
+    .leftJoin(enrollments, eq(enrollments.cohortId, cohorts.id))
     .where(
       and(
         eq(courseMaterials.id, materialId),
@@ -30,7 +35,7 @@ export async function GET(
       ),
     )
     .limit(1);
-  if (!access?.pathname) {
+  if (!access || (!access.pathname && !access.externalUrl)) {
     await getDb().insert(productEvents).values({
       eventName: "protected_access_failure",
       actorUserId: member.userId,
@@ -38,6 +43,11 @@ export async function GET(
     });
     return Response.json({ error: "Not found" }, { status: 404 });
   }
+
+  if (access.kind === "link" && access.externalUrl) {
+    return Response.redirect(access.externalUrl, 302);
+  }
+  if (!access.pathname) return Response.json({ error: "Not found" }, { status: 404 });
 
   const result = await getPrivateDocument(access.pathname);
   if (!result || result.statusCode !== 200) return Response.json({ error: "Not found" }, { status: 404 });

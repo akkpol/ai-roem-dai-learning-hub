@@ -23,7 +23,7 @@ import { issueCertificateForCompletedEnrollment } from "@/lib/services/certifica
 
 const enrollmentIdSchema = z.string().uuid();
 
-async function refreshEnrollmentCompletion(input: {
+export async function refreshEnrollmentCompletion(input: {
   enrollmentId: string;
   actorUserId: string | null;
   approve: boolean;

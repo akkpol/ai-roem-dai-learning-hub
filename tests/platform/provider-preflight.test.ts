@@ -10,6 +10,10 @@ const migrationEnvironment = readFileSync(
   new URL("../../scripts/database/migration-env.ts", import.meta.url),
   "utf8",
 );
+const environmentExample = readFileSync(
+  new URL("../../.env.example", import.meta.url),
+  "utf8",
+);
 
 describe("SESSION-002 provider preflight ordering", () => {
   it("runs the executable provider preflight before the first migration", () => {
@@ -27,7 +31,16 @@ describe("SESSION-002 provider preflight ordering", () => {
       'from "./provider-preflight"',
     );
     expect(migrationEnvironment).toContain(
-      "preflightSession002DatabaseTarget(input)",
+      "await preflightSession002DatabaseTarget(input, providerFetch)",
     );
+  });
+
+  it("supplies only the Neon API key as provider authority in CI", () => {
+    expect(workflow).toContain(
+      "NEON_API_KEY: ${{ secrets.NEON_API_KEY }}",
+    );
+    expect(workflow).not.toContain("SESSION_002_APPROVED_");
+    expect(environmentExample).toContain("NEON_API_KEY=");
+    expect(environmentExample).not.toContain("SESSION_002_APPROVED_");
   });
 });

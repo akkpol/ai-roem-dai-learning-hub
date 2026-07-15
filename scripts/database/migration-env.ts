@@ -1,7 +1,9 @@
 import { preflightSession002DatabaseTarget } from "./provider-preflight";
 
-export function readMigrationDatabaseUrl(
+export async function readMigrationDatabaseUrl(
   input: Record<string, string | undefined>,
-): string {
-  return preflightSession002DatabaseTarget(input).migrationUrl;
+  providerFetch: typeof fetch = fetch,
+): Promise<string> {
+  return (await preflightSession002DatabaseTarget(input, providerFetch))
+    .migrationUrl;
 }

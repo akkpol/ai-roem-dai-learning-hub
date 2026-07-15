@@ -22,6 +22,30 @@ const approvedAcceptance = {
   SESSION_002_APPROVED_NEON_DATABASE_NAME: approvedIdentity.NEON_DATABASE_NAME,
 };
 
+const fetchProviderAuthority: typeof fetch = async (request) => {
+  const pathname = new URL(request.toString()).pathname;
+  if (pathname.endsWith("/endpoints")) {
+    return Response.json({ endpoints: [{
+      id: approvedIdentity.NEON_ENDPOINT_ID,
+      project_id: approvedIdentity.NEON_PROJECT_ID,
+      branch_id: approvedIdentity.NEON_BRANCH_ID,
+      host: approvedIdentity.NEON_ENDPOINT_HOSTNAME,
+    }] });
+  }
+  if (pathname.endsWith("/databases")) {
+    return Response.json({ databases: [{
+      branch_id: approvedIdentity.NEON_BRANCH_ID,
+      name: approvedIdentity.NEON_DATABASE_NAME,
+    }] });
+  }
+  return Response.json({ branch: {
+    id: approvedIdentity.NEON_BRANCH_ID,
+    project_id: approvedIdentity.NEON_PROJECT_ID,
+    name: approvedIdentity.NEON_BRANCH_NAME,
+    default: false,
+  } });
+};
+
 const approvedUrl =
   "postgresql://migrator:secret@ep-session-002.ap-southeast-1.aws.neon.tech/" +
   "learning_hub_session_002_test?sslmode=verify-full";
@@ -36,6 +60,7 @@ function resetEnvironment(
   const identity = { ...approvedIdentity, ...overrides };
   const acknowledgedIdentity = acknowledgeOverrides ? identity : approvedIdentity;
   return {
+    NEON_API_KEY: "provider-api-secret",
     ...approvedAcceptance,
     ...identity,
     DATABASE_URL: approvedApplicationUrl,
@@ -52,57 +77,65 @@ function resetEnvironment(
   };
 }
 
-function expectResetRejected(
+async function expectResetRejected(
   url: string,
   input: Record<string, string | undefined>,
-): void {
-  expect(() => assertSafeIntegrationReset(url, input)).toThrow(
+): Promise<void> {
+  await expect(assertSafeIntegrationReset(
+    url,
+    input,
+    fetchProviderAuthority,
+  )).rejects.toThrow(
     "Refusing destructive integration reset",
   );
 }
 
 describe("assertSafeIntegrationReset", () => {
-  it("allows one fully matching disposable non-default Neon identity", () => {
-    expect(() =>
-      assertSafeIntegrationReset(approvedUrl, resetEnvironment()),
-    ).not.toThrow();
+  it("allows one fully matching disposable non-default Neon identity", async () => {
+    await expect(
+      assertSafeIntegrationReset(
+        approvedUrl,
+        resetEnvironment(),
+        fetchProviderAuthority,
+      ),
+    ).resolves.toBeDefined();
   });
 
-  it("rejects the same database name on a different hostname", () => {
-    expectResetRejected(
+  it("rejects the same database name on a different hostname", async () => {
+    await expectResetRejected(
       approvedUrl.replace("ep-session-002.", "ep-other."),
       resetEnvironment(),
     );
   });
 
-  it("rejects a pg-connection-string host override before destructive reset", () => {
+  it("rejects a pg-connection-string host override before destructive reset", async () => {
     const overriddenUrl = `${approvedUrl}&host=remote.example.com`;
     expect(parsePostgresConnectionString(overriddenUrl).host).toBe(
       "remote.example.com",
     );
-    expectResetRejected(
+    await expectResetRejected(
       overriddenUrl,
       { ...resetEnvironment(), MIGRATION_DATABASE_URL: overriddenUrl },
     );
   });
 
-  it("rejects hostaddr before destructive reset", () => {
+  it("rejects hostaddr before destructive reset", async () => {
     const overriddenUrl = `${approvedUrl}&hostaddr=192.0.2.1`;
-    expectResetRejected(
+    await expectResetRejected(
       overriddenUrl,
       { ...resetEnvironment(), MIGRATION_DATABASE_URL: overriddenUrl },
     );
   });
 
-  it("rejects an internally consistent wrong project", () => {
-    expectResetRejected(
+  it("rejects an internally consistent wrong project", async () => {
+    await expectResetRejected(
       approvedUrl,
       resetEnvironment({ NEON_PROJECT_ID: "wrong-project" }, true),
     );
   });
 
-  it("rejects an internally consistent branch outside trusted acceptance metadata", () => {
-    expectResetRejected(
+  it("rejects an internally consistent branch outside trusted acceptance metadata", async () => {
+    await expectResetRejected(
       approvedUrl,
       resetEnvironment({
         NEON_BRANCH_ID: "br-unapproved",
@@ -111,8 +144,8 @@ describe("assertSafeIntegrationReset", () => {
     );
   });
 
-  it("rejects the trusted default branch ID even when declared non-default", () => {
-    expectResetRejected(
+  it("rejects the trusted default branch ID even when declared non-default", async () => {
+    await expectResetRejected(
       approvedUrl,
       {
         ...resetEnvironment({
@@ -125,9 +158,9 @@ describe("assertSafeIntegrationReset", () => {
     );
   });
 
-  it("rejects a consistently changed endpoint outside trusted acceptance metadata", () => {
+  it("rejects a consistently changed endpoint outside trusted acceptance metadata", async () => {
     const wrongHostname = "ep-unapproved.ap-southeast-1.aws.neon.tech";
-    expectResetRejected(
+    await expectResetRejected(
       approvedUrl.replace(approvedIdentity.NEON_ENDPOINT_HOSTNAME, wrongHostname),
       resetEnvironment({
         NEON_ENDPOINT_ID: "ep-unapproved",
@@ -142,22 +175,22 @@ describe("assertSafeIntegrationReset", () => {
     "NEON_ENDPOINT_ID",
     "NEON_ENDPOINT_HOSTNAME",
     "NEON_DATABASE_NAME",
-  ] as const)("rejects a missing %s", (field) => {
-    expectResetRejected(approvedUrl, resetEnvironment({ [field]: undefined }));
+  ] as const)("rejects a missing %s", async (field) => {
+    await expectResetRejected(approvedUrl, resetEnvironment({ [field]: undefined }));
   });
 
   it.each([
     "NEON_PROJECT_ID",
     "NEON_BRANCH_ID",
     "NEON_ENDPOINT_ID",
-  ] as const)("rejects a mismatched %s", (field) => {
+  ] as const)("rejects a mismatched %s", async (field) => {
     const input = resetEnvironment();
     input[field] = `different-${field.toLowerCase()}`;
-    expectResetRejected(approvedUrl, input);
+    await expectResetRejected(approvedUrl, input);
   });
 
-  it("rejects a mismatched endpoint hostname", () => {
-    expectResetRejected(
+  it("rejects a mismatched endpoint hostname", async () => {
+    await expectResetRejected(
       approvedUrl,
       resetEnvironment({
         NEON_ENDPOINT_HOSTNAME: "ep-other.ap-southeast-1.aws.neon.tech",
@@ -165,8 +198,8 @@ describe("assertSafeIntegrationReset", () => {
     );
   });
 
-  it("rejects a mismatched database", () => {
-    expectResetRejected(
+  it("rejects a mismatched database", async () => {
+    await expectResetRejected(
       approvedUrl,
       resetEnvironment({ NEON_DATABASE_NAME: "different_test" }, true),
     );
@@ -174,16 +207,16 @@ describe("assertSafeIntegrationReset", () => {
 
   it.each([undefined, "database-only", "mismatched-identity"])(
     "rejects a missing or mismatched identity acknowledgement",
-    (acknowledgement) => {
-      expectResetRejected(approvedUrl, {
+    async (acknowledgement) => {
+      await expectResetRejected(approvedUrl, {
         ...resetEnvironment(),
         REMOTE_TEST_NEON_IDENTITY_ACK: acknowledgement,
       });
     },
   );
 
-  it("rejects a missing database acknowledgement", () => {
-    expectResetRejected(approvedUrl, {
+  it("rejects a missing database acknowledgement", async () => {
+    await expectResetRejected(approvedUrl, {
       ...resetEnvironment(),
       REMOTE_TEST_DATABASE_RESET_ACK: undefined,
     });
@@ -193,12 +226,12 @@ describe("assertSafeIntegrationReset", () => {
     { NEON_BRANCH_IS_DEFAULT: "true" },
     { NEON_BRANCH_NAME: "production", NEON_BRANCH_IS_DEFAULT: "false" },
     { NEON_BRANCH_NAME: "main", NEON_BRANCH_IS_DEFAULT: "false" },
-  ])("rejects a declared default or production branch", (override) => {
-    expectResetRejected(approvedUrl, resetEnvironment(override, true));
+  ])("rejects a declared default or production branch", async (override) => {
+    await expectResetRejected(approvedUrl, resetEnvironment(override, true));
   });
 
-  it("rejects a non-Neon or loopback endpoint", () => {
-    expectResetRejected(
+  it("rejects a non-Neon or loopback endpoint", async () => {
+    await expectResetRejected(
       "postgresql://migrator:secret@127.0.0.1/learning_hub_session_002_test",
       resetEnvironment({ NEON_ENDPOINT_HOSTNAME: "127.0.0.1" }, true),
     );

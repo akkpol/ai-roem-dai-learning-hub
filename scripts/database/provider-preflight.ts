@@ -8,7 +8,8 @@ import {
 
 const approvedProjectId = "raspy-feather-85795196";
 const forbiddenDefaultBranchId = "br-solitary-cell-aorxyd0b";
-const forbiddenBranchNames = new Set(["default", "main", "prod", "production"]);
+const neonApiBaseUrl = "https://console.neon.tech/api/v2";
+const forbiddenBranchNameToken = /(?:^|[-_])(default|main|prod|production)(?:$|[-_])/i;
 
 type Environment = Record<string, string | undefined>;
 
@@ -28,9 +29,10 @@ export type ValidatedDatabaseTarget = Readonly<{
   providerIdentity?: ApprovedProviderIdentity;
 }>;
 
-export function preflightSession002DatabaseTarget(
+export async function preflightSession002DatabaseTarget(
   input: Environment,
-): ValidatedDatabaseTarget {
+  providerFetch: typeof fetch = fetch,
+): Promise<ValidatedDatabaseTarget> {
   const applicationUrl = readPostgresUrl(input.DATABASE_URL, "DATABASE_URL");
   const migrationUrl = readPostgresUrl(
     input.MIGRATION_DATABASE_URL,
@@ -58,15 +60,25 @@ export function preflightSession002DatabaseTarget(
     return Object.freeze({ applicationUrl, migrationUrl, kind: "local" });
   }
 
-  return validateApprovedRemoteTarget(applicationUrl, migrationUrl, input);
+  try {
+    return await validateApprovedRemoteTarget(
+      applicationUrl,
+      migrationUrl,
+      input,
+      providerFetch,
+    );
+  } catch {
+    throw new Error("Database provider preflight rejected");
+  }
 }
 
-export function assertSafeIntegrationReset(
+export async function assertSafeIntegrationReset(
   url: string,
   input: Environment,
-): ValidatedDatabaseTarget {
+  providerFetch: typeof fetch = fetch,
+): Promise<ValidatedDatabaseTarget> {
   try {
-    const target = preflightSession002DatabaseTarget(input);
+    const target = await preflightSession002DatabaseTarget(input, providerFetch);
     const identity = target.providerIdentity;
     if (
       target.kind !== "session-002-neon" ||
@@ -83,50 +95,108 @@ export function assertSafeIntegrationReset(
   }
 }
 
-function validateApprovedRemoteTarget(
+async function validateApprovedRemoteTarget(
   applicationUrl: string,
   migrationUrl: string,
   input: Environment,
-): ValidatedDatabaseTarget {
+  providerFetch: typeof fetch,
+): Promise<ValidatedDatabaseTarget> {
   const application = new URL(applicationUrl);
   const migration = new URL(migrationUrl);
   const requested = readRequestedIdentity(input);
-  const accepted = readAcceptedIdentity(input);
-  const endpointSuffix = accepted.endpointHostname.slice(
-    accepted.endpointId.length,
-  );
-  const pooledHostname = `${accepted.endpointId}-pooler${endpointSuffix}`;
 
   if (
     requested.projectId !== approvedProjectId ||
-    requested.branchId !== accepted.branchId ||
-    requested.branchName !== accepted.branchName ||
-    requested.endpointId !== accepted.endpointId ||
-    requested.endpointHostname !== accepted.endpointHostname ||
-    requested.database !== accepted.database ||
-    accepted.branchId === forbiddenDefaultBranchId ||
-    forbiddenBranchNames.has(accepted.branchName.toLowerCase()) ||
-    input.NEON_BRANCH_IS_DEFAULT !== "false" ||
-    !accepted.endpointHostname.endsWith(".neon.tech") ||
-    accepted.endpointHostname.split(".")[0] !== accepted.endpointId ||
-    migration.hostname !== accepted.endpointHostname ||
-    ![accepted.endpointHostname, pooledHostname].includes(application.hostname) ||
     !hasApprovedPort(application) ||
     !hasApprovedPort(migration) ||
-    databaseName(application) !== accepted.database ||
-    databaseName(migration) !== accepted.database ||
-    !accepted.database.endsWith("_test")
+    !requested.database.endsWith("_test")
+  ) {
+    throw new Error("Database provider preflight rejected");
+  }
+
+  const apiKey = requiredApiKey(input.NEON_API_KEY);
+  const branchPath =
+    `/projects/${approvedProjectId}/branches/` +
+    encodeURIComponent(requested.branchId);
+  const branchResponse = await readProviderJson(
+    providerFetch,
+    branchPath,
+    apiKey,
+  );
+  const branch = providerRecord(providerRecord(branchResponse).branch);
+  const branchId = providerString(branch.id);
+  const branchProjectId = providerString(branch.project_id);
+  const branchName = providerString(branch.name);
+  const branchIsDefault = providerBoolean(branch.default);
+
+  if (
+    branchId !== requested.branchId ||
+    branchProjectId !== approvedProjectId ||
+    branchName !== requested.branchName ||
+    branchIsDefault ||
+    branchId === forbiddenDefaultBranchId ||
+    forbiddenBranchNameToken.test(branchName) ||
+    input.NEON_BRANCH_IS_DEFAULT !== "false"
+  ) {
+    throw new Error("Database provider preflight rejected");
+  }
+
+  const endpointsResponse = await readProviderJson(
+    providerFetch,
+    `${branchPath}/endpoints`,
+    apiKey,
+  );
+  const endpoints = providerArray(providerRecord(endpointsResponse).endpoints);
+  const endpoint = endpoints
+    .map(providerRecord)
+    .find((candidate) => candidate.id === requested.endpointId);
+  if (!endpoint) {
+    throw new Error("Database provider preflight rejected");
+  }
+  const endpointId = providerString(endpoint.id);
+  const endpointProjectId = providerString(endpoint.project_id);
+  const endpointBranchId = providerString(endpoint.branch_id);
+  const endpointHostname = providerString(endpoint.host);
+  const endpointSuffix = endpointHostname.slice(endpointId.length);
+  const pooledHostname = `${endpointId}-pooler${endpointSuffix}`;
+
+  if (
+    endpointProjectId !== approvedProjectId ||
+    endpointBranchId !== branchId ||
+    endpointHostname !== requested.endpointHostname ||
+    !endpointHostname.endsWith(".neon.tech") ||
+    endpointHostname.split(".")[0] !== endpointId ||
+    migration.hostname !== endpointHostname ||
+    application.hostname !== pooledHostname
+  ) {
+    throw new Error("Database provider preflight rejected");
+  }
+
+  const databasesResponse = await readProviderJson(
+    providerFetch,
+    `${branchPath}/databases`,
+    apiKey,
+  );
+  const databases = providerArray(providerRecord(databasesResponse).databases);
+  const database = databases
+    .map(providerRecord)
+    .find((candidate) => candidate.name === requested.database);
+  if (
+    !database ||
+    providerString(database.branch_id) !== branchId ||
+    databaseName(application) !== requested.database ||
+    databaseName(migration) !== requested.database
   ) {
     throw new Error("Database provider preflight rejected");
   }
 
   const providerIdentity = Object.freeze({
     projectId: approvedProjectId,
-    branchId: accepted.branchId,
-    branchName: accepted.branchName,
-    endpointId: accepted.endpointId,
-    endpointHostname: accepted.endpointHostname,
-    database: accepted.database,
+    branchId,
+    branchName,
+    endpointId,
+    endpointHostname,
+    database: requested.database,
   });
   return Object.freeze({
     applicationUrl,
@@ -144,25 +214,6 @@ function readRequestedIdentity(input: Environment): ApprovedProviderIdentity {
     endpointId: requiredIdentityValue(input.NEON_ENDPOINT_ID),
     endpointHostname: requiredIdentityValue(input.NEON_ENDPOINT_HOSTNAME),
     database: requiredIdentityValue(input.NEON_DATABASE_NAME),
-  });
-}
-
-function readAcceptedIdentity(input: Environment): ApprovedProviderIdentity {
-  return Object.freeze({
-    projectId: approvedProjectId,
-    branchId: requiredIdentityValue(input.SESSION_002_APPROVED_NEON_BRANCH_ID),
-    branchName: requiredIdentityValue(
-      input.SESSION_002_APPROVED_NEON_BRANCH_NAME,
-    ),
-    endpointId: requiredIdentityValue(
-      input.SESSION_002_APPROVED_NEON_ENDPOINT_ID,
-    ),
-    endpointHostname: requiredIdentityValue(
-      input.SESSION_002_APPROVED_NEON_ENDPOINT_HOSTNAME,
-    ),
-    database: requiredIdentityValue(
-      input.SESSION_002_APPROVED_NEON_DATABASE_NAME,
-    ),
   });
 }
 
@@ -187,6 +238,59 @@ function readPostgresUrl(value: string | undefined, variableName: string): strin
 
 function requiredIdentityValue(value: string | undefined): string {
   if (!value || value.includes("|")) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return value;
+}
+
+function requiredApiKey(value: string | undefined): string {
+  if (!value?.trim()) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return value.trim();
+}
+
+async function readProviderJson(
+  providerFetch: typeof fetch,
+  path: string,
+  apiKey: string,
+): Promise<unknown> {
+  const response = await providerFetch(`${neonApiBaseUrl}${path}`, {
+    method: "GET",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return response.json();
+}
+
+function providerRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return value as Record<string, unknown>;
+}
+
+function providerArray(value: unknown): unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return value;
+}
+
+function providerString(value: unknown): string {
+  if (typeof value !== "string" || !value) {
+    throw new Error("Database provider preflight rejected");
+  }
+  return value;
+}
+
+function providerBoolean(value: unknown): boolean {
+  if (typeof value !== "boolean") {
     throw new Error("Database provider preflight rejected");
   }
   return value;
@@ -220,7 +324,7 @@ if (
   import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 ) {
   try {
-    preflightSession002DatabaseTarget(process.env);
+    await preflightSession002DatabaseTarget(process.env);
     console.info("database.provider_preflight.completed");
   } catch (error) {
     console.error("database.provider_preflight.failed", {

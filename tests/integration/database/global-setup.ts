@@ -8,7 +8,7 @@ import { runMigrations } from "../../../scripts/database/run-migrations";
 export { assertSafeIntegrationReset };
 
 export default async function setup(): Promise<void> {
-  const target = assertSafeIntegrationReset(
+  const target = await assertSafeIntegrationReset(
     process.env.MIGRATION_DATABASE_URL ?? "",
     process.env,
   );

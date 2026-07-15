@@ -3,6 +3,7 @@ import { parse as parsePostgresConnectionString } from "pg-connection-string";
 import { readMigrationDatabaseUrl } from "../../scripts/database/migration-env";
 
 const remoteIdentity = {
+  NEON_API_KEY: "provider-api-secret",
   NEON_PROJECT_ID: "raspy-feather-85795196",
   NEON_BRANCH_ID: "br-session-002",
   NEON_BRANCH_NAME: "session-002-580e95d2",
@@ -18,6 +19,36 @@ const remoteIdentity = {
   SESSION_002_APPROVED_NEON_DATABASE_NAME: "learning_hub_session_002_test",
 };
 
+const fetchProviderAuthority: typeof fetch = async (request) => {
+  const pathname = new URL(request.toString()).pathname;
+  if (pathname.endsWith("/endpoints")) {
+    return Response.json({ endpoints: [{
+      id: remoteIdentity.NEON_ENDPOINT_ID,
+      project_id: remoteIdentity.NEON_PROJECT_ID,
+      branch_id: remoteIdentity.NEON_BRANCH_ID,
+      host: remoteIdentity.NEON_ENDPOINT_HOSTNAME,
+    }] });
+  }
+  if (pathname.endsWith("/databases")) {
+    return Response.json({ databases: [{
+      branch_id: remoteIdentity.NEON_BRANCH_ID,
+      name: remoteIdentity.NEON_DATABASE_NAME,
+    }] });
+  }
+  return Response.json({ branch: {
+    id: remoteIdentity.NEON_BRANCH_ID,
+    project_id: remoteIdentity.NEON_PROJECT_ID,
+    name: remoteIdentity.NEON_BRANCH_NAME,
+    default: false,
+  } });
+};
+
+function readMigration(
+  input: Record<string, string | undefined>,
+): Promise<string> {
+  return readMigrationDatabaseUrl(input, fetchProviderAuthority);
+}
+
 function remoteEnvironment(
   applicationUrl: string,
   migrationUrl: string,
@@ -30,31 +61,31 @@ function remoteEnvironment(
 }
 
 describe("readMigrationDatabaseUrl", () => {
-  it("accepts a separate postgres migration URL", () => {
-    expect(readMigrationDatabaseUrl({
+  it("accepts a separate postgres migration URL", async () => {
+    expect(await readMigration({
       DATABASE_URL: "postgresql://app:secret@localhost/learning_hub_test",
       MIGRATION_DATABASE_URL: "postgresql://migrator:secret@localhost/learning_hub_test",
     })).toContain("migrator");
   });
 
-  it("rejects missing configuration or an identical URL", () => {
-    expect(() => readMigrationDatabaseUrl({})).toThrow();
+  it("rejects missing configuration or an identical URL", async () => {
+    await expect(readMigration({})).rejects.toThrow();
     const url = "postgresql://same:secret@localhost/learning_hub_test";
-    expect(() => readMigrationDatabaseUrl({
+    await expect(readMigration({
       DATABASE_URL: url,
       MIGRATION_DATABASE_URL: url,
-    })).toThrow(/must be separate/);
+    })).rejects.toThrow(/must be separate/);
   });
 
-  it("rejects matching login principals despite encoded URLs and query differences", () => {
-    expect(() => readMigrationDatabaseUrl(remoteEnvironment(
+  it("rejects matching login principals despite encoded URLs and query differences", async () => {
+    await expect(readMigration(remoteEnvironment(
       "postgresql://%61pp:app-secret@ep-session-002-pooler.ap-southeast-1.aws.neon.tech/learning_hub_session_002_test?sslmode=require",
       "postgresql://app:migration-secret@ep-session-002.ap-southeast-1.aws.neon.tech/learning_hub_session_002_test?sslmode=require&channel_binding=require",
-    ))).toThrow(/different PostgreSQL login principals/);
+    ))).rejects.toThrow(/different PostgreSQL login principals/);
   });
 
-  it("allows distinct login principals across direct and pooled hosts", () => {
-    expect(readMigrationDatabaseUrl(remoteEnvironment(
+  it("allows distinct login principals across direct and pooled hosts", async () => {
+    expect(await readMigration(remoteEnvironment(
       "postgresql://app:app-secret@ep-session-002-pooler.ap-southeast-1.aws.neon.tech/learning_hub_session_002_test?sslmode=require",
       "postgresql://migrator:migration-secret@ep-session-002.ap-southeast-1.aws.neon.tech/learning_hub_session_002_test?sslmode=require",
     ))).toContain("migrator");
@@ -62,43 +93,43 @@ describe("readMigrationDatabaseUrl", () => {
 
   it.each([undefined, "disable", "allow", "prefer"])(
     "rejects a remote migration URL with sslmode=%s",
-    (sslmode) => {
+    async (sslmode) => {
       const query = sslmode ? `?sslmode=${sslmode}` : "";
-      expect(() => readMigrationDatabaseUrl({
+      await expect(readMigration({
         DATABASE_URL:
           "postgresql://app:app-secret@ep-pooler.example.com/learning_hub_test?sslmode=require",
         MIGRATION_DATABASE_URL:
           `postgresql://migrator:migration-secret@ep-direct.example.com/learning_hub_test${query}`,
-      })).toThrow(/TLS/);
+      })).rejects.toThrow(/TLS/);
     },
   );
 
   it.each(["require", "verify-ca", "verify-full"])(
     "accepts a remote migration URL with sslmode=%s",
-    (sslmode) => {
+    async (sslmode) => {
       const migrationUrl =
         "postgresql://migrator:migration-secret@ep-session-002.ap-southeast-1.aws.neon.tech/" +
         `learning_hub_session_002_test?sslmode=${sslmode}`;
-      expect(readMigrationDatabaseUrl(remoteEnvironment(
+      expect(await readMigration(remoteEnvironment(
         "postgresql://app:app-secret@ep-session-002-pooler.ap-southeast-1.aws.neon.tech/learning_hub_session_002_test?sslmode=require",
         migrationUrl,
       ))).toBe(migrationUrl);
     },
   );
 
-  it("rejects a remote application URL without TLS in migration configuration", () => {
-    expect(() => readMigrationDatabaseUrl({
+  it("rejects a remote application URL without TLS in migration configuration", async () => {
+    await expect(readMigration({
       DATABASE_URL:
         "postgresql://app:app-secret@ep-pooler.example.com/learning_hub_test",
       MIGRATION_DATABASE_URL:
         "postgresql://migrator:migration-secret@ep-direct.example.com/learning_hub_test?sslmode=require",
-    })).toThrow(/TLS/);
+    })).rejects.toThrow(/TLS/);
   });
 
   it.each(["localhost", "127.0.0.1", "[::1]"])(
     "allows exact loopback host %s without sslmode",
-    (hostname) => {
-      expect(readMigrationDatabaseUrl({
+    async (hostname) => {
+      expect(await readMigration({
         DATABASE_URL: `postgresql://app:secret@${hostname}/learning_hub_test`,
         MIGRATION_DATABASE_URL:
           `postgresql://migrator:secret@${hostname}/learning_hub_test`,
@@ -106,25 +137,25 @@ describe("readMigrationDatabaseUrl", () => {
     },
   );
 
-  it("rejects a pg-connection-string effective host override before migration", () => {
+  it("rejects a pg-connection-string effective host override before migration", async () => {
     const migrationUrl =
       "postgresql://migrator:secret@localhost/learning_hub_test" +
       "?host=remote.example.com";
     expect(parsePostgresConnectionString(migrationUrl).host).toBe(
       "remote.example.com",
     );
-    expect(() => readMigrationDatabaseUrl({
+    await expect(readMigration({
       DATABASE_URL: "postgresql://app:secret@localhost/learning_hub_test",
       MIGRATION_DATABASE_URL: migrationUrl,
-    })).toThrow();
+    })).rejects.toThrow();
   });
 
-  it("rejects hostaddr overrides before migration", () => {
-    expect(() => readMigrationDatabaseUrl({
+  it("rejects hostaddr overrides before migration", async () => {
+    await expect(readMigration({
       DATABASE_URL:
         "postgresql://app:secret@localhost/learning_hub_test?hostaddr=192.0.2.1",
       MIGRATION_DATABASE_URL:
         "postgresql://migrator:secret@localhost/learning_hub_test",
-    })).toThrow();
+    })).rejects.toThrow();
   });
 });

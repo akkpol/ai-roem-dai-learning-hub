@@ -5,7 +5,7 @@ import { readMigrationDatabaseUrl } from "../../../scripts/database/migration-en
 import { runMigrations } from "../../../scripts/database/run-migrations";
 
 it("migrates an empty database and repeats safely", async () => {
-  const url = readMigrationDatabaseUrl(process.env);
+  const url = await readMigrationDatabaseUrl(process.env);
   await runMigrations(url);
   const client = new Client({ connectionString: url });
   await client.connect();

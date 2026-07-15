@@ -2,7 +2,8 @@ import { readMigrationDatabaseUrl } from "./migration-env";
 import { runMigrations } from "./run-migrations";
 
 try {
-  await runMigrations(readMigrationDatabaseUrl(process.env));
+  const migrationUrl = await readMigrationDatabaseUrl(process.env);
+  await runMigrations(migrationUrl);
   console.info("database.migration.completed");
 } catch (error) {
   console.error("database.migration.failed", {

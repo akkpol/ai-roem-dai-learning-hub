@@ -1,0 +1,13 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f7f5ef;
+  color: #14213d;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.status-page { max-width: 48rem; margin: 0 auto; padding: 20vh 1.5rem 4rem; }
+.eyebrow { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; }
+h1 { max-width: 18ch; font-size: clamp(2.5rem, 7vw, 5rem); line-height: 1; margin: 1rem 0; }
+p { font-size: 1.05rem; line-height: 1.7; }

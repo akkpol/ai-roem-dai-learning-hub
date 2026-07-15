@@ -1,95 +1,25 @@
-# AI เริ่มได้
+# Learning Hub
 
-แพลตฟอร์มเรียน AI ภาษาไทยแบบ 3 workspaces สำหรับผู้เรียน ผู้สอน และแอดมิน สร้างด้วย Next.js, Vercel, Neon Postgres/Auth และ Stripe Checkout
+Learning Hub คือแพลตฟอร์ม Marketplace การเรียนรู้หลายศาสตร์ที่เชื่อมผู้เรียน ผู้สอน สถาบัน และทีมปฏิบัติการของแพลตฟอร์มเข้าด้วยกัน
 
-ระบบรองรับ flow หลัก:
+โครงการกำลังอยู่ระหว่าง Clean Rebuild โดยไม่มีผู้ใช้หรือข้อมูล Production เดิมที่ต้องย้าย โค้ดปัจจุบันซึ่งสร้างจากแนวคิด AI Closed Beta ถือเป็น legacy และห้ามใช้เป็นข้อกำหนดของผลิตภัณฑ์ใหม่
 
-1. ผู้สอนสร้าง immutable course revision, preview แบบผู้เรียน และส่งให้แอดมินตรวจ
-2. แอดมินอนุมัติ revision/ราคา มอบหมายผู้สอน และเปิด public หรือ invite-only cohort
-3. ผู้เรียนจองที่นั่งฟรี; เมื่อถึงขั้นต่ำ แอดมินเปิดรอบชำระเงิน 48 ชั่วโมง
-4. Stripe-hosted Checkout รับ THB ผ่านวิธีที่เปิดใน Dashboard เช่น PromptPay และบัตร
-5. Webhook ที่ตรวจลายเซ็น ยอดเงิน และสกุลเงินแล้วเท่านั้นจึงสร้าง enrollment แบบ idempotent
-6. ผู้สอนใช้ `/teach` จัด session, batch attendance, grading, announcements และ Q&A ของรุ่นที่ได้รับมอบหมาย
-7. Completion policy ออกใบประกาศแบบ automatic หรือรอ admin approval
+## Source of truth
 
-## Local development
+- [Product and system design](docs/product/PRODUCT_AND_SYSTEM_DESIGN.md)
+- [Project status — สถานะปัจจุบันแบบสั้น](docs/project/PROJECT_STATUS.md)
+- [Master roadmap](docs/project/MASTER_ROADMAP.md)
+- [Legacy inventory](docs/project/LEGACY_INVENTORY.md)
 
-```bash
-npm install
-npm run dev
-```
+ห้ามเริ่มฟีเจอร์ใหม่จากข้อความในโค้ด ข้อมูล demo หรือ commit เก่า หากข้อกำหนดไม่อยู่ในเอกสารต้นทาง ให้แก้และอนุมัติเอกสารก่อนพัฒนา
 
-เมื่อไม่มี provider environment variables ระบบ local จะใช้ deterministic demo read model เพื่อเปิดดู Public, Member และ Admin UI ได้ โดย production จะไม่เปิด demo mode
+## Current status
 
-เส้นทางสำคัญ:
+- Product direction: approved
+- Architecture direction: approved
+- Legacy data migration: not required
+- Implementation: paused until subsystem plans are written and reviewed
 
-- `/courses/ai-fundamentals`
-- `/learn`
-- `/teach`
-- `/teach/courses/:courseId`
-- `/teach/cohorts/:cohortId`
-- `/account/certificates`
-- `/certificates/akkapol-ai-2569`
-- `/admin`
-- `/admin/cohorts`
-- `/admin/invitations`
-- `/admin/analytics`
-- `/admin/reviews`
-- `/admin/access`
-- `/admin/payments`
+## AI delivery control
 
-## Verification
-
-```bash
-npm run lint
-npm run typecheck
-npm test
-npm run db:check
-npm run build
-```
-
-## Stripe test mode
-
-ตั้ง `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` และ `APP_URL` แล้ว forward event ด้วย Stripe CLI:
-
-```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
-stripe trigger checkout.session.completed
-```
-
-Success URL แสดงสถานะอย่างเดียวและไม่สร้างสิทธิ์เรียน การ fulfillment เกิดใน webhook หลังตรวจ `payment_status`, amount, currency และ local order snapshot เท่านั้น Checkout Session มีอายุไม่เกิน 24 ชั่วโมงและสร้างใหม่ได้จนถึง payment deadline 48 ชั่วโมง
-
-## Database
-
-ใช้ pooled runtime connection สำหรับเว็บ และ direct owner connection สำหรับ migration เท่านั้น
-
-```bash
-npm run db:generate
-npm run db:check
-npm run db:migrate
-```
-
-`next build` จะไม่รัน migration ไม่ว่ากรณีใด ส่วน seed ถูกป้องกันไว้สำหรับฐาน Preview ว่างเท่านั้น:
-
-```powershell
-$env:CONFIRM_SEED='preview'
-npm run db:seed
-```
-
-ดูขั้นตอนเชื่อม provider และ production approval ที่ [docs/deployment.md](docs/deployment.md) และขั้นตอนทดสอบกู้คืนที่ [docs/restore-drill.md](docs/restore-drill.md)
-
-## Security boundary
-
-- Session, role, ownership และ Zod validation ตรวจฝั่ง server ทุก write
-- URL เป็นตัวกำหนด workspace; `preferred_workspace` cookie ไม่ใช่หลักฐาน authorization
-- `member_roles`, `course_authors` และ `cohort_instructors` บังคับ resource scope แบบ deny-by-default
-- Stripe webhook ใช้ raw request body, signature verification และ provider event ledger ป้องกัน event ซ้ำ
-- Meeting URL, Blob material, YouTube Private grant และ PDF เป็นข้อมูลตาม enrollment
-- Cron ใช้ `CRON_SECRET`; outbox ใช้ dedupe key, retry และ row locking
-- ใบประกาศ private โดยค่าเริ่มต้น; public verification ต้องเปิดโดยเจ้าของ
-- ห้ามใส่ credential ลง Git หรือใช้ connection string ที่เคยเปิดเผยในแชต
-- ห้ามใช้ `npm audit fix --force`
-
-## Expansion migration และ rollback window
-
-Migration `0001_learning-studio-expansion.sql` backfill role และ course revision 1 โดยยังเก็บ `profiles.role` กับโครงสร้าง course เดิมไว้อย่างน้อยหนึ่ง release เพื่อ rollback ได้ ก่อน contract migration ห้ามลบ legacy columns/tables จนกว่าจะยืนยันจำนวน profile, course, cohort, reservation, enrollment, lesson, assignment และ material ตรงกับ baseline แล้ว
+Technical Lead เป็นผู้กำหนด work package, ตรวจ evidence, อัปเดต roadmap และออก Prompt Packet ให้ Coding Session ทีละงาน Coding Session ไม่มีสิทธิ์ขยาย scope หรือประกาศงานว่า verified เอง

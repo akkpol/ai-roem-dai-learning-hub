@@ -179,6 +179,9 @@ ALTER TABLE "enrollments" ADD COLUMN "order_id" uuid;--> statement-breakpoint
 ALTER TABLE "lessons" ADD COLUMN "revision_id" uuid;--> statement-breakpoint
 ALTER TABLE "lessons" ADD COLUMN "module_id" uuid;--> statement-breakpoint
 ALTER TABLE "seat_reservations" ADD COLUMN "admission_mode_snapshot" "cohort_admission_mode" DEFAULT 'invite_only' NOT NULL;--> statement-breakpoint
+-- Backfill conflict targets must exist before the data-copy statements below.
+CREATE UNIQUE INDEX "course_modules_revision_sort_unique" ON "course_modules" USING btree ("revision_id","sort_order");--> statement-breakpoint
+CREATE UNIQUE INDEX "course_revisions_course_number_unique" ON "course_revisions" USING btree ("course_id","revision_number");--> statement-breakpoint
 -- Expansion backfill: keep profiles.role as the rollback source for one release.
 INSERT INTO "member_roles" ("user_id", "role")
 SELECT "user_id", "role" FROM "profiles"
@@ -281,8 +284,6 @@ CREATE INDEX "cohort_instructors_user_idx" ON "cohort_instructors" USING btree (
 CREATE INDEX "cohort_thread_replies_thread_idx" ON "cohort_thread_replies" USING btree ("thread_id","created_at");--> statement-breakpoint
 CREATE INDEX "cohort_threads_cohort_status_idx" ON "cohort_threads" USING btree ("cohort_id","status","pinned","updated_at");--> statement-breakpoint
 CREATE INDEX "course_authors_user_idx" ON "course_authors" USING btree ("user_id","course_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "course_modules_revision_sort_unique" ON "course_modules" USING btree ("revision_id","sort_order");--> statement-breakpoint
-CREATE UNIQUE INDEX "course_revisions_course_number_unique" ON "course_revisions" USING btree ("course_id","revision_number");--> statement-breakpoint
 CREATE INDEX "course_revisions_review_queue_idx" ON "course_revisions" USING btree ("status","submitted_at");--> statement-breakpoint
 CREATE INDEX "member_roles_role_idx" ON "member_roles" USING btree ("role","user_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "orders_reservation_unique" ON "orders" USING btree ("reservation_id");--> statement-breakpoint

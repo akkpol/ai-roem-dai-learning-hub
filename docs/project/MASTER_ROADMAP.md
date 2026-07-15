@@ -19,6 +19,15 @@
 
 Coding Session ไม่มีสิทธิ์เปลี่ยนงานเป็น `verified` ผู้ควบคุมโครงการเปลี่ยนสถานะได้หลังตรวจหลักฐานเท่านั้น
 
+## Git isolation policy
+
+- ห้าม Coding Session แก้ไฟล์หรือ commit บน `main`
+- ทุก work package ใช้ isolated Git worktree และ branch `codex/<work-package>-<slug>`
+- WP-00 ใช้ branch `codex/wp-00-repository-reset`
+- ให้ใช้ worktree capability ของ Codex ตอนสร้าง task ก่อนเสมอ ห้ามสร้าง manual worktree ซ้อนเมื่อ task ถูก isolate อยู่แล้ว
+- Session ต้องรัน worktree preflight และหยุดก่อนแก้ไฟล์หากพบว่าอยู่ใน normal checkout, submodule หรือ branch `main`
+- Lead ตรวจ handoff และ merge งานที่ผ่าน review กลับ `main`
+
 ## Work packages
 
 | ID | Work package | Depends on | Status | Exit gate |
@@ -62,4 +71,4 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 
 ## Next control action
 
-Issue Session Prompt `SESSION-001` to a fresh Coding Session. Do not begin WP-01 until WP-00 handoff has been independently reviewed.
+Create a fresh Codex Coding Session with an isolated worktree on `codex/wp-00-repository-reset`, then issue Session Prompt `SESSION-001`. Do not begin WP-01 until WP-00 handoff has been independently reviewed.

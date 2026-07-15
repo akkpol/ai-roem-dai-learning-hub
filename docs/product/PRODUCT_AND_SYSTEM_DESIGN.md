@@ -265,6 +265,7 @@ Report submitted → case triaged → evidence preserved → scoped action appli
 8. Reviewer ตรวจ spec compliance ก่อน code style
 9. ห้ามอ้างข้อความจาก legacy code เป็น requirement
 10. เมื่อ context ใหญ่เกินหนึ่ง subsystem ให้หยุดและแตก spec ใหม่
+11. Coding Session ทุกงานต้องเริ่มใน isolated Git worktree; `main` เป็นพื้นที่รวมงานที่ผ่าน review แล้วเท่านั้น
 
 ## 15. Legacy disposition
 

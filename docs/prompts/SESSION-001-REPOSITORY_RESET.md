@@ -24,10 +24,14 @@ The implementation plan is authoritative for task order and exact target content
 
 ## Execution method
 
+- Use the `superpowers:using-git-worktrees` skill first.
+- This task is authorized to use an isolated worktree. Prefer the native Codex worktree created with the task; use branch `codex/wp-00-repository-reset` for a branch-backed worktree.
+- Verify `git rev-parse --git-dir` differs from `git rev-parse --git-common-dir`, verify the checkout is not a submodule, and verify the current branch is not `main` before editing.
+- If the task is in a normal checkout or on `main`, stop without changing files and ask the user to reopen the Coding Session with worktree isolation.
 - Use the `superpowers:executing-plans` skill.
 - Run `git status --short` before editing. If tracked changes exist beyond this committed Prompt Packet, stop and report them to the Lead.
 - Execute Tasks 1—5 in order.
-- Work in the current repo; do not create a new repo or worktree unless the user explicitly requests one.
+- Work only in the isolated checkout; do not create a new repository or a nested worktree.
 - Use `apply_patch` for tracked file edits and deletions.
 - Commit after each task exactly as the plan requires.
 - Do not delegate or start parallel agents.

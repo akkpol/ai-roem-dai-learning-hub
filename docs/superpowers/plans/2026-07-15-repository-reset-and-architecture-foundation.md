@@ -18,6 +18,8 @@
 - Do not implement authentication, database schema, catalog, organization, instructor, learner, commerce, or visual product design.
 - Production code must have no demo mode, fake success, or silent provider fallback.
 - Use `apply_patch` for all tracked file edits and deletions.
+- Execute only inside an isolated Git worktree; never edit or commit on `main`.
+- Use branch `codex/wp-00-repository-reset` unless a native Codex worktree provides an externally managed detached HEAD.
 - Do not mark WP-00 as `verified`; the Lead does that only after reviewing the handoff.
 
 ---

@@ -1,12 +1,16 @@
 # WP-01 Platform Foundation and Identity Design
 
-**Status:** Owner review
+**Status:** Approved
 
 **Date:** 2026-07-15
 
 **Owner:** Product owner
 
 **Technical owner:** Lead SWE / AI delivery coordinator
+
+**Approved by:** Product owner
+
+**Approved on:** 2026-07-15
 
 ## 1. เป้าหมาย
 

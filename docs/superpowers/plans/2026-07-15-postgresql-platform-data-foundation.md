@@ -37,7 +37,7 @@
 | Path | Responsibility |
 |---|---|
 | `drizzle.config.ts` / `drizzle/**` | credential-free generation และ reviewed SQL |
-| `compose.yaml` / `infra/postgres/local-init.sql` | PostgreSQL และ local/CI roles |
+| Neon operator bootstrap | production-derived test branch, database roles, and external CI configuration |
 | `src/platform/database/**` | config, pool, transaction, schema export, readiness |
 | `src/platform/events/**` | outbox types, schema และ transactional operations |
 | `scripts/database/**` | migration credential และ operator runner |
@@ -158,9 +158,9 @@ git commit -m "build: add postgres migration toolchain"
 
 ### Task 2: Define database roles and migration-only config
 
-**Files:** Create `compose.yaml`, `infra/postgres/local-init.sql`, `scripts/database/migration-env.ts`, `tests/platform/migration-env.test.ts`; modify `.env.example`
+**Files:** Create `scripts/database/migration-env.ts`, `tests/platform/migration-env.test.ts`; modify `.env.example`
 
-**Interfaces:** Produces group role `learning_hub_app`, local login `learning_hub_app_local` and `readMigrationDatabaseUrl(input)`.
+**Interfaces:** Produces the Neon operator role contract and `readMigrationDatabaseUrl(input)`.
 
 - [ ] **Step 1: Write the failing migration config test**
 
@@ -205,57 +205,17 @@ export function readMigrationDatabaseUrl(
 }
 ~~~
 
-- [ ] **Step 3: Create role bootstrap and local service**
+- [ ] **Step 3: Record the Neon operator bootstrap contract**
 
-`infra/postgres/local-init.sql`:
+For every production-derived, isolated Neon test branch, the approved operator creates a database ending in `_test`, creates the non-login `learning_hub_app` role and a least-privilege application login, grants the role to that login, and revokes public-schema create access. The direct migration URL, pooled application URL, and exact database-name acknowledgement remain external configuration only.
 
-~~~sql
-\set ON_ERROR_STOP on
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'learning_hub_app') THEN
-    EXECUTE 'CREATE ROLE learning_hub_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION';
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'learning_hub_app_local') THEN
-    EXECUTE 'CREATE ROLE learning_hub_app_local LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION';
-  END IF;
-END
-$$;
-ALTER ROLE learning_hub_app_local PASSWORD 'local_app_password';
-GRANT learning_hub_app TO learning_hub_app_local;
-REVOKE CREATE ON SCHEMA public FROM PUBLIC;
-~~~
-
-`compose.yaml`:
-
-~~~yaml
-services:
-  postgres:
-    image: postgres:18.4-alpine3.24
-    environment:
-      POSTGRES_DB: learning_hub_test
-      POSTGRES_USER: learning_hub_migrator
-      POSTGRES_PASSWORD: local_migration_password
-    ports: ["5432:5432"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U learning_hub_migrator -d learning_hub_test"]
-      interval: 2s
-      timeout: 3s
-      retries: 20
-    volumes:
-      - learning_hub_postgres:/var/lib/postgresql/data
-      - ./infra/postgres/local-init.sql:/docker-entrypoint-initdb.d/010-local-roles.sql:ro
-volumes:
-  learning_hub_postgres:
-~~~
-
-Replace `.env.example`:
+Replace `.env.example` without sample credentials:
 
 ~~~dotenv
 NODE_ENV=development
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-DATABASE_URL=postgresql://learning_hub_app_local:local_app_password@127.0.0.1:5432/learning_hub_test
-MIGRATION_DATABASE_URL=postgresql://learning_hub_migrator:local_migration_password@127.0.0.1:5432/learning_hub_test
+DATABASE_URL=
+MIGRATION_DATABASE_URL=
 DATABASE_POOL_MAX=10
 DATABASE_CONNECTION_TIMEOUT_MS=5000
 DATABASE_IDLE_TIMEOUT_MS=30000
@@ -264,10 +224,10 @@ DATABASE_QUERY_TIMEOUT_MS=10000
 
 - [ ] **Step 4: Verify and commit**
 
-Run `npm test -- tests/platform/migration-env.test.ts`. Expected: 2 tests pass. Docker เป็นทางเลือกสำหรับ local development; acceptance หลักใช้ Neon branch ชั่วคราวและ GitHub CI PostgreSQL.
+Run `npm test -- tests/platform/migration-env.test.ts`. Expected: 2 tests pass. Acceptance uses only an approved production-derived Neon branch and GitHub CI external configuration.
 
 ~~~powershell
-git add compose.yaml infra/postgres/local-init.sql scripts/database/migration-env.ts tests/platform/migration-env.test.ts .env.example
+git add scripts/database/migration-env.ts tests/platform/migration-env.test.ts .env.example
 git commit -m "chore: define postgres role contract"
 ~~~
 
@@ -676,27 +636,13 @@ git commit -m "feat: add database readiness probe"
 
 **Interfaces:** Produces observed PostgreSQL, Neon branch และ Vercel Preview evidence; WP-01 remains unverified.
 
-- [ ] **Step 1: Add CI service and gates**
+- [ ] **Step 1: Add Neon-only CI gates**
 
-~~~yaml
-services:
-  postgres:
-    image: postgres:18.4-alpine3.24
-    env:
-      POSTGRES_DB: learning_hub_test
-      POSTGRES_USER: learning_hub_migrator
-      POSTGRES_PASSWORD: local_migration_password
-    ports: ["5432:5432"]
-    options: >-
-      --health-cmd "pg_isready -U learning_hub_migrator -d learning_hub_test"
-      --health-interval 2s --health-timeout 3s --health-retries 20
-~~~
-
-After install, pipe `infra/postgres/local-init.sql` into `docker exec -i ${{ job.services.postgres.id }} psql`, then run migration with both CI URLs. After unit tests run integration with both URLs. Keep build without URLs. Give only app URL to HTTP smoke and assert exact readiness 200 JSON.
+After install, run architecture, lint, typecheck, unit tests, and build without database URLs. Then require externally configured direct migration and pooled application URLs plus the exact remote reset acknowledgement. The gate must fail closed when any required external value is missing, run migration and integration with both URLs, and use only the application URL for the readiness smoke. No local database runtime is permitted.
 
 - [ ] **Step 2: Run gates**
 
-Run architecture, lint, typecheck, unit, build and `npm audit --omit=dev --audit-level=high`. Expected all exit 0. Integration must passใน GitHub CI และ Neon branch ชั่วคราว; unavailable Docker is NOT RUN, never PASS.
+Run architecture, lint, typecheck, unit, build and `npm audit --omit=dev --audit-level=high`. Expected all exit 0. Integration must pass in GitHub CI and an approved production-derived Neon branch; unavailable external checks are `NOT RUN`, never `PASS`.
 
 - [ ] **Step 3: Write handoff and trackers**
 

@@ -35,4 +35,4 @@
 
 ## งานถัดไป
 
-Lead ตรวจ handoff ของ SESSION-002 และหลักฐาน PostgreSQL/CI ก่อนเริ่ม SESSION-003
+Lead จัด Neon test branch และ external CI configuration, ตรวจ handoff ของ SESSION-002 และหลักฐาน Neon/CI ก่อนเริ่ม SESSION-003

@@ -49,7 +49,7 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 
 | Session | Work package | Status | Checkpoint |
 |---|---|---|---|
-| SESSION-002 | WP-01 | `review` | PostgreSQL platform foundation handoff submitted; WP-01 remains `planned` until all required sessions pass Lead review. |
+| SESSION-002 | WP-01 | `review` | Neon-only PostgreSQL platform foundation handoff submitted; WP-01 remains `planned` until all required sessions pass Lead review. |
 
 ## Project-wide gates
 
@@ -79,4 +79,4 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 
 ## Next control action
 
-เปิด SESSION-002 จาก `docs/prompts/SESSION-002-POSTGRESQL-FOUNDATION.md` และห้ามเริ่ม SESSION-003 จนกว่า SESSION-002 จะผ่าน Lead review
+Lead must provision the approved Neon test branch and external CI configuration, then review SESSION-002 before SESSION-003 starts.

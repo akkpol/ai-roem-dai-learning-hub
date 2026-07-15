@@ -14,17 +14,6 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-    services:
-      postgres:
-        image: postgres:18.4-alpine3.24
-        env:
-          POSTGRES_DB: learning_hub_test
-          POSTGRES_USER: learning_hub_migrator
-          POSTGRES_PASSWORD: local_migration_password
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U learning_hub_migrator -d learning_hub_test"
-          --health-interval 2s --health-timeout 3s --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,31 +21,28 @@ jobs:
           node-version: 24.18.0
           cache: npm
       - run: npm ci --ignore-scripts
-      - name: Bootstrap PostgreSQL application roles
-        shell: bash
-        run: |
-          docker exec -i ${{ job.services.postgres.id }} \
-            psql -v ON_ERROR_STOP=1 -U learning_hub_migrator -d learning_hub_test \
-            < infra/postgres/local-init.sql
-      - name: Apply reviewed PostgreSQL migrations
-        env:
-          DATABASE_URL: postgresql://learning_hub_app_local:local_app_password@127.0.0.1:5432/learning_hub_test
-          MIGRATION_DATABASE_URL: postgresql://learning_hub_migrator:local_migration_password@127.0.0.1:5432/learning_hub_test
-        run: npm run db:migrate
       - run: npm run architecture
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - name: PostgreSQL integration tests
-        env:
-          DATABASE_URL: postgresql://learning_hub_app_local:local_app_password@127.0.0.1:5432/learning_hub_test
-          MIGRATION_DATABASE_URL: postgresql://learning_hub_migrator:local_migration_password@127.0.0.1:5432/learning_hub_test
-        run: npm run test:integration
       - run: npm run build
+      - name: Required Neon test-branch migration and integration gate
+        env:
+          DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.NEON_SESSION_002_MIGRATION_DATABASE_URL }}
+          REMOTE_TEST_DATABASE_RESET_ACK: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+        shell: bash
+        run: |
+          test -n "$DATABASE_URL"
+          test -n "$MIGRATION_DATABASE_URL"
+          test -n "$REMOTE_TEST_DATABASE_RESET_ACK"
+          test "$DATABASE_URL" != "$MIGRATION_DATABASE_URL"
+          npm run db:migrate
+          npm run test:integration
       - name: Production HTTP smoke test
         shell: bash
         env:
-          DATABASE_URL: postgresql://learning_hub_app_local:local_app_password@127.0.0.1:5432/learning_hub_test
+          DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/learning-hub.log 2>&1 &

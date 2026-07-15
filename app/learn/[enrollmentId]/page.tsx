@@ -4,8 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowSquareOut, FileText } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/app-shell";
 import { LearningWorkflows } from "@/components/learning-workflows";
+import { CohortCommunity } from "@/components/cohort-community";
+import { hasRole } from "@/lib/auth/roles";
 import { getCurrentMember } from "@/lib/auth/session";
 import { getEnrollmentDetail } from "@/lib/data/read-model";
+import { getCommunityView } from "@/lib/data/community-read-model";
 
 export const metadata: Metadata = { title: "ห้องเรียน" };
 export const dynamic = "force-dynamic";
@@ -13,8 +16,9 @@ export const dynamic = "force-dynamic";
 export default async function EnrollmentPage({ params }: { params: Promise<{ enrollmentId: string }> }) {
   const member = await getCurrentMember();
   if (!member) redirect("/auth/sign-in?next=/learn");
-  const enrollment = await getEnrollmentDetail((await params).enrollmentId, member.userId, member.role === "admin", member.demo);
+  const enrollment = await getEnrollmentDetail((await params).enrollmentId, member.userId, hasRole(member.roles, "admin"), member.demo);
   if (!enrollment) notFound();
+  const community = await getCommunityView(enrollment.cohortId, member.demo);
 
   return (
     <AppShell active="learn">
@@ -34,6 +38,7 @@ export default async function EnrollmentPage({ params }: { params: Promise<{ enr
             <section><p className="eyebrow">MATERIALS</p><h2>เอกสารประกอบ</h2>{enrollment.materials.map((material) => <a className="material-link" href={`/api/materials/${material.id}`} key={material.id}><FileText /> {material.title}</a>)}</section>
           </aside>
         </div>
+        <CohortCommunity cohortId={enrollment.cohortId} community={community} demo={member.demo} />
       </main>
     </AppShell>
   );

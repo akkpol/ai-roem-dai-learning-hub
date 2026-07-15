@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { enrollments } from "@/db/schema";
+import { cohortInstructors, courseAuthors, enrollments } from "@/db/schema";
+import { hasRole, type MemberRole } from "./roles";
 import { getCurrentMember, type AppMember } from "./session";
 
 export class AuthorizationError extends Error {
@@ -19,16 +20,58 @@ export async function requireMember(): Promise<AppMember> {
 }
 
 export async function requireAdmin(): Promise<AppMember> {
+  return requireRole("admin", "รายการนี้สำหรับผู้ดูแลระบบเท่านั้น");
+}
+
+export async function requireRole(
+  role: MemberRole,
+  message = "คุณไม่มีสิทธิ์เข้าพื้นที่ทำงานนี้",
+): Promise<AppMember> {
   const member = await requireMember();
-  if (member.role !== "admin") {
-    throw new AuthorizationError("รายการนี้สำหรับผู้ดูแลระบบเท่านั้น");
+  if (!hasRole(member.roles, role)) {
+    throw new AuthorizationError(message);
   }
+  return member;
+}
+
+export async function requireCourseAuthor(courseId: string): Promise<AppMember> {
+  const member = await requireRole("instructor", "รายการนี้สำหรับผู้สอนเท่านั้น");
+  const [assignment] = await getDb()
+    .select({ courseId: courseAuthors.courseId })
+    .from(courseAuthors)
+    .where(and(eq(courseAuthors.courseId, courseId), eq(courseAuthors.userId, member.userId)))
+    .limit(1);
+
+  if (!assignment) {
+    throw new AuthorizationError("คุณไม่ได้รับมอบหมายให้เขียนคอร์สนี้");
+  }
+
+  return member;
+}
+
+export async function requireCohortInstructor(cohortId: string): Promise<AppMember> {
+  const member = await requireRole("instructor", "รายการนี้สำหรับผู้สอนเท่านั้น");
+  const [assignment] = await getDb()
+    .select({ cohortId: cohortInstructors.cohortId })
+    .from(cohortInstructors)
+    .where(
+      and(
+        eq(cohortInstructors.cohortId, cohortId),
+        eq(cohortInstructors.userId, member.userId),
+      ),
+    )
+    .limit(1);
+
+  if (!assignment) {
+    throw new AuthorizationError("คุณไม่ได้รับมอบหมายให้ดูแลรุ่นเรียนนี้");
+  }
+
   return member;
 }
 
 export async function requireEnrollmentOwner(enrollmentId: string) {
   const member = await requireMember();
-  if (member.role === "admin") {
+  if (hasRole(member.roles, "admin")) {
     return member;
   }
 

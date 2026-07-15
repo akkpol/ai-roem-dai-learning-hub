@@ -59,19 +59,22 @@ export async function reserveInvitedSeatForMember(
     if (windowState === "not_open") throw new Error("รุ่นนี้ยังไม่เปิดรับการจอง");
     if (windowState === "closed") throw new Error("รุ่นนี้ปิดรับการจองแล้ว");
 
-    const [invite] = await tx
-      .select()
-      .from(courseInvites)
-      .where(
-        and(
-          eq(courseInvites.cohortId, cohortId),
-          sql`lower(${courseInvites.email}) = lower(${member.email})`,
-          inArray(courseInvites.status, ["pending", "accepted"]),
-        ),
-      )
-      .limit(1);
-    if (!invite || invite.expiresAt.getTime() <= now.getTime()) {
-      throw new Error("คำเชิญไม่ถูกต้องหรือหมดอายุแล้ว");
+    let invite: typeof courseInvites.$inferSelect | undefined;
+    if (cohort.admissionMode === "invite_only") {
+      [invite] = await tx
+        .select()
+        .from(courseInvites)
+        .where(
+          and(
+            eq(courseInvites.cohortId, cohortId),
+            sql`lower(${courseInvites.email}) = lower(${member.email})`,
+            inArray(courseInvites.status, ["pending", "accepted"]),
+          ),
+        )
+        .limit(1);
+      if (!invite || invite.expiresAt.getTime() <= now.getTime()) {
+        throw new Error("คำเชิญไม่ถูกต้องหรือหมดอายุแล้ว");
+      }
     }
 
     await tx
@@ -124,7 +127,8 @@ export async function reserveInvitedSeatForMember(
       .insert(seatReservations)
       .values({
         cohortId,
-        inviteId: invite.id,
+        inviteId: invite?.id,
+        admissionModeSnapshot: cohort.admissionMode,
         userId: member.userId,
         status: decision === "reserved" ? "active" : "waitlisted",
         proposedStartsAt: cohort.startsAt,
@@ -132,14 +136,16 @@ export async function reserveInvitedSeatForMember(
       })
       .returning();
 
-    await tx
-      .update(courseInvites)
-      .set({
-        status: "accepted",
-        acceptedByUserId: member.userId,
-        acceptedAt: now,
-      })
-      .where(eq(courseInvites.id, invite.id));
+    if (invite) {
+      await tx
+        .update(courseInvites)
+        .set({
+          status: "accepted",
+          acceptedByUserId: member.userId,
+          acceptedAt: now,
+        })
+        .where(eq(courseInvites.id, invite.id));
+    }
 
     await tx
       .insert(notificationOutbox)
@@ -263,6 +269,9 @@ export async function confirmCohortByAdmin(input: {
       .for("update")
       .limit(1);
     if (!cohort) throw new Error("ไม่พบรุ่นเรียนนี้");
+    if (cohort.priceAmount > 0) {
+      throw new Error("รุ่นที่มีราคาให้ใช้ขั้นตอนเปิดชำระเงิน 48 ชั่วโมงแทนการสร้าง enrollment โดยตรง");
+    }
 
     const reservations = await tx
       .select({
@@ -311,6 +320,7 @@ export async function confirmCohortByAdmin(input: {
           userId: reservation.userId,
           cohortId: cohort.id,
           reservationId: reservation.id,
+          courseRevisionId: cohort.courseRevisionId,
         })
         .onConflictDoNothing({ target: enrollments.reservationId });
       await tx
@@ -667,6 +677,9 @@ export async function acceptFallbackCohort(rawOriginalCohortId: string) {
       throw new Error(
         fallbackWindow === "not_open" ? "รุ่นใหม่ยังไม่เปิดรับการจอง" : "รุ่นใหม่ปิดรับแล้ว",
       );
+    }
+    if (!originalReservation.inviteId) {
+      throw new Error("การย้ายรุ่นอัตโนมัติรองรับเฉพาะคำจองแบบมีคำเชิญ");
     }
     const [originalInvite] = await tx
       .select()

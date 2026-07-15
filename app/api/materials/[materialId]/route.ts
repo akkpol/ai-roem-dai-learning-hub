@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb, hasDatabaseConnection } from "@/db";
 import { cohorts, courseMaterials, enrollments, productEvents } from "@/db/schema";
+import { hasRole } from "@/lib/auth/roles";
 import { getCurrentMember } from "@/lib/auth/session";
 import { getPrivateDocument } from "@/lib/storage/private-blob";
 
@@ -30,7 +31,7 @@ export async function GET(
     .where(
       and(
         eq(courseMaterials.id, materialId),
-        member.role === "admin" ? undefined : eq(enrollments.userId, member.userId),
+        hasRole(member.roles, "admin") ? undefined : eq(enrollments.userId, member.userId),
         inArray(cohorts.status, ["confirmed", "in_progress", "completed"]),
       ),
     )

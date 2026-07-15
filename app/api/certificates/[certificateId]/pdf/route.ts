@@ -1,4 +1,5 @@
 import { getCurrentMember } from "@/lib/auth/session";
+import { hasRole } from "@/lib/auth/roles";
 import { renderCertificatePdf } from "@/lib/certificates/pdf";
 import { getCertificateById } from "@/lib/data/read-model";
 
@@ -16,7 +17,7 @@ export async function GET(
   const certificate = await getCertificateById(
     certificateId,
     member.userId,
-    member.role === "admin",
+    hasRole(member.roles, "admin"),
   );
   if (!certificate) return Response.json({ error: "Not found" }, { status: 404 });
 

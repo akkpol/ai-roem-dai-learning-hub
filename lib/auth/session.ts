@@ -1,13 +1,15 @@
 import { eq } from "drizzle-orm";
 import { getDb, hasDatabaseConnection } from "@/db";
-import { profiles } from "@/db/schema";
+import { memberRoles, profiles } from "@/db/schema";
+import { resolveMemberRoles, type MemberRole } from "./roles";
 import { getNeonAuth, isLocalDemoMode } from "./server";
 
 export type AppMember = {
   userId: string;
   email: string;
   displayName: string;
-  role: "student" | "instructor" | "admin";
+  avatarUrl: string | null;
+  roles: MemberRole[];
   emailVerified: boolean;
   demo: boolean;
 };
@@ -15,8 +17,9 @@ export type AppMember = {
 const demoMember: AppMember = {
   userId: "demo-admin",
   email: "beta@ai-roem-dai.local",
-  displayName: "ทีม AI เริ่มได้",
-  role: "admin",
+  displayName: "กาญจนา",
+  avatarUrl: "/images/avatar-kanyaporn.webp",
+  roles: ["student", "instructor", "admin"],
   emailVerified: true,
   demo: true,
 };
@@ -43,11 +46,12 @@ export async function getCurrentMember(): Promise<AppMember | null> {
     .limit(1);
 
   if (!profile) {
-    const role =
+    const legacyRole: MemberRole =
       process.env.BOOTSTRAP_ADMIN_EMAIL?.toLowerCase() === data.user.email.toLowerCase()
         ? "admin"
         : "student";
-    const [created] = await getDb()
+    const db = getDb();
+    await db
       .insert(profiles)
       .values({
         userId: data.user.id,
@@ -55,25 +59,45 @@ export async function getCurrentMember(): Promise<AppMember | null> {
         emailVerifiedAt: data.user.emailVerified ? new Date() : null,
         displayName: data.user.name || data.user.email,
         avatarUrl: data.user.image,
-        role,
+        role: legacyRole,
       })
-      .onConflictDoNothing({ target: profiles.userId })
-      .returning();
+      .onConflictDoNothing({ target: profiles.userId });
+    const initialRoles: MemberRole[] =
+      legacyRole === "admin" ? ["student", "admin"] : ["student"];
+    await db
+      .insert(memberRoles)
+      .values(initialRoles.map((role) => ({ userId: data.user.id, role })))
+      .onConflictDoNothing();
+    const [created] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.userId, data.user.id))
+      .limit(1);
     return {
       userId: data.user.id,
       email: data.user.email,
       displayName: created?.displayName ?? data.user.name ?? data.user.email,
-      role: created?.role ?? role,
+      avatarUrl: created?.avatarUrl ?? data.user.image ?? null,
+      roles: initialRoles,
       emailVerified: data.user.emailVerified,
       demo: false,
     };
   }
 
+  const expandedRoles = await getDb()
+    .select({ role: memberRoles.role })
+    .from(memberRoles)
+    .where(eq(memberRoles.userId, data.user.id));
+
   return {
     userId: data.user.id,
     email: data.user.email,
     displayName: profile.displayName,
-    role: profile.role,
+    avatarUrl: profile.avatarUrl,
+    roles: resolveMemberRoles(
+      expandedRoles.map((row) => row.role),
+      profile.role,
+    ),
     emailVerified: data.user.emailVerified,
     demo: false,
   };

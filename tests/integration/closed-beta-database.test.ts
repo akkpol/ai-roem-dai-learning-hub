@@ -39,6 +39,8 @@ describe.skipIf(!runDatabaseTests)("Closed Beta database integration", () => {
     await adminClient.query("drop schema if exists public cascade; create schema public");
     const migration = await readFile("drizzle/0000_closed_beta_baseline.sql", "utf8");
     await adminClient.query(migration);
+    const expansion = await readFile("drizzle/0001_learning-studio-expansion.sql", "utf8");
+    await adminClient.query(expansion);
   }, 30_000);
 
   beforeEach(async () => {

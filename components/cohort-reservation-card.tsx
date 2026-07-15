@@ -8,6 +8,7 @@ const initialState: CohortActionState = { ok: false, message: "" };
 
 function statusCopy(status: CohortCard["status"]) {
   if (status === "threshold_met") return "ถึงเกณฑ์แล้ว กำลังรอทีมงานยืนยัน";
+  if (status === "payment_collecting") return "เปิดรอบชำระเงินแล้ว 48 ชั่วโมง";
   if (status === "confirmed") return "คลาสนี้เปิดแน่นอน";
   if (status === "postponed") return "กำลังเสนอวันเรียนใหม่";
   if (status === "cancelled") return "คลาสนี้ถูกยกเลิก";

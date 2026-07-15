@@ -2,6 +2,7 @@ export type CohortStatus =
   | "draft"
   | "collecting"
   | "threshold_met"
+  | "payment_collecting"
   | "confirmed"
   | "in_progress"
   | "completed"
@@ -35,6 +36,7 @@ export function getReservationWindowState(input: {
 }
 
 const terminalOrCommittedStatuses: CohortStatus[] = [
+  "payment_collecting",
   "confirmed",
   "in_progress",
   "completed",

@@ -13,10 +13,12 @@ import {
   type CohortActionState,
 } from "@/app/actions/cohorts";
 import type { CohortCard } from "@/lib/data/read-model";
+import { openPaymentCollectionStateAction, type PaymentActionState } from "@/app/actions/checkout";
 import { formatBangkokDateTime } from "@/lib/domain/datetime";
 
 const initialState: CohortActionState = { ok: false, message: "" };
 const initialOperationState: AdminOperationState = { ok: false, message: "" };
+const initialPaymentState: PaymentActionState = { ok: false, message: "" };
 
 function dateTimeValue(value: Date) {
   return formatBangkokDateTime(new Date(value));
@@ -28,6 +30,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
   const [editState, editAction, editing] = useActionState(updateCohortAction, initialOperationState);
   const [fallbackState, fallbackAction, fallbackPending] = useActionState(setFallbackCohortAction, initialOperationState);
   const [openState, openAction, opening] = useActionState(openCohortRegistrationAction, initialOperationState);
+  const [paymentState, openPayment, openingPayment] = useActionState(openPaymentCollectionStateAction, initialPaymentState);
   const [demoConfirmed, setDemoConfirmed] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [demoMessage, setDemoMessage] = useState("");
@@ -52,7 +55,12 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
           <button type="submit" disabled={opening}>{opening ? "กำลังเปิดรับ…" : "เปิดรับคำจอง"}</button>
         </form>
       )}
-      {(status === "threshold_met" || status === "collecting") && (
+      {status === "threshold_met" && (cohort.priceAmount ?? 0) > 0 ? (
+        <form action={openPayment} onSubmit={demo ? (event) => { event.preventDefault(); setDemoMessage("เปิดรอบชำระเงิน 48 ชั่วโมงในโหมดตัวอย่างแล้ว"); } : undefined} className="admin-inline-form">
+          <input type="hidden" name="cohortId" value={cohort.id} />
+          <button type="submit" disabled={openingPayment}>{openingPayment ? "กำลังเปิดรอบ…" : `เปิดชำระเงิน ฿${((cohort.priceAmount ?? 0) / 100).toLocaleString("th-TH")}`}</button>
+        </form>
+      ) : (status === "threshold_met" || status === "collecting") && (
         demo ? (
           <div className="admin-inline-form">
             {belowThreshold && <input aria-label="เหตุผลเปิดต่ำกว่าเกณฑ์" placeholder="เหตุผลที่จำเป็นต้องเปิดต่ำกว่าเกณฑ์" value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} />}
@@ -98,7 +106,7 @@ function AdminCohortCard({ cohort, demo, allCohorts }: { cohort: CohortCard; dem
           <button type="submit" disabled={cancelling}>{cancelling ? "กำลังยกเลิก…" : "ยกเลิกคลาสพร้อม audit"}</button>
         </form>
       )}
-      {(state.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage) && <p className="action-message" data-success={state.ok || cancelState.ok || editState.ok || fallbackState.ok || openState.ok || Boolean(demoMessage)}>{state.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage}</p>}
+      {(state.message || paymentState.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage) && <p className="action-message" data-success={state.ok || paymentState.ok || cancelState.ok || editState.ok || fallbackState.ok || openState.ok || Boolean(demoMessage)}>{state.message || paymentState.message || cancelState.message || editState.message || fallbackState.message || openState.message || demoMessage}</p>}
     </article>
   );
 }

@@ -4,8 +4,10 @@ import { redirect } from "next/navigation";
 import { CalendarBlank, ChartBar, PlayCircle } from "@phosphor-icons/react/dist/ssr";
 import { AppShell } from "@/components/app-shell";
 import { LearnerReservations } from "@/components/learner-reservations";
+import { LearnerNextAction } from "@/components/learner-next-action";
 import { getCurrentMember } from "@/lib/auth/session";
 import { getLearnerEnrollments, getLearnerReservations } from "@/lib/data/read-model";
+import { getLearnerNextAction } from "@/lib/data/learner-studio-read-model";
 
 export const metadata: Metadata = { title: "การเรียนของฉัน" };
 export const dynamic = "force-dynamic";
@@ -13,15 +15,17 @@ export const dynamic = "force-dynamic";
 export default async function LearnPage() {
   const member = await getCurrentMember();
   if (!member) redirect("/auth/sign-in?next=/learn");
-  const [enrollments, reservations] = await Promise.all([
+  const [enrollments, reservations, nextAction] = await Promise.all([
     getLearnerEnrollments(member.userId, member.demo),
     getLearnerReservations(member.userId, member.demo),
+    getLearnerNextAction(member.userId, member.demo),
   ]);
 
   return (
     <AppShell active="learn">
       <main className="portal-main dashboard-page">
         <div className="page-heading"><div><p className="eyebrow">MEMBER AREA</p><h1>การเรียนของฉัน</h1><p>คลาสที่ยืนยันแล้ว เอกสาร และความคืบหน้าจะอยู่ที่นี่</p></div></div>
+        <LearnerNextAction action={nextAction} demo={member.demo} />
         <div className="enrollment-grid">
           {enrollments.map((enrollment) => (
             <article className="enrollment-card" key={enrollment.id}>

@@ -56,6 +56,9 @@ const scheduleSchema = z
 
 export async function createCohortByAdmin(input: {
   courseId: string;
+  courseRevisionId?: string;
+  admissionMode?: "public" | "invite_only";
+  priceBaht?: number | string;
   title: string;
   startsAt: string;
   endsAt?: string;
@@ -65,7 +68,7 @@ export async function createCohortByAdmin(input: {
   maximumEnrollment: number | string;
 }) {
   const parsed = z
-    .object({ courseId: uuid, title: z.string().trim().min(3).max(200) })
+    .object({ courseId: uuid, courseRevisionId: uuid.optional(), admissionMode: z.enum(["public", "invite_only"]).default("invite_only"), priceBaht: z.coerce.number().min(0).max(1_000_000).default(0), title: z.string().trim().min(3).max(200) })
     .and(capacitySchema)
     .and(scheduleSchema)
     .parse(input);
@@ -81,6 +84,10 @@ export async function createCohortByAdmin(input: {
       .insert(cohorts)
       .values({
         courseId: parsed.courseId,
+        courseRevisionId: parsed.courseRevisionId,
+        admissionMode: parsed.admissionMode,
+        priceAmount: Math.round(parsed.priceBaht * 100),
+        currency: "THB",
         title: parsed.title,
         status: "draft",
         startsAt: parsed.startsAt,

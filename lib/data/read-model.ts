@@ -17,6 +17,7 @@ import {
   courseInstructors,
   courseInvites,
   courseMaterials,
+  courseRevisions,
   courseTools,
   courses as courseTable,
   enrollmentCompletions,
@@ -48,6 +49,7 @@ export type CohortCard = {
     | "draft"
     | "collecting"
     | "threshold_met"
+    | "payment_collecting"
     | "confirmed"
     | "in_progress"
     | "completed"
@@ -58,6 +60,10 @@ export type CohortCard = {
   registrationDeadlineAt: Date;
   minimumEnrollment: number;
   maximumEnrollment: number;
+  admissionMode?: "public" | "invite_only";
+  priceAmount?: number;
+  currency?: string;
+  paymentDeadlineAt?: Date | null;
   activeReservations: number;
   waitlistedReservations: number;
   fallbackCohortId: string | null;
@@ -438,6 +444,7 @@ export async function getLearnerEnrollments(userId: string, demo = false) {
 }
 
 export type EnrollmentDetail = EnrollmentSummary & {
+  cohortId: string;
   meetingProvider: string | null;
   meetingUrl: string | null;
   lessons: Array<{
@@ -465,6 +472,7 @@ export type EnrollmentDetail = EnrollmentSummary & {
 
 const demoEnrollmentDetail: EnrollmentDetail = {
   ...demoEnrollment,
+  cohortId: "00000000-0000-4000-8000-000000000103",
   meetingProvider: "Google Meet",
   meetingUrl: "https://meet.google.com/lookup/ai-roem-dai-demo",
   lessons: [
@@ -606,6 +614,7 @@ export async function getEnrollmentDetail(
 
   return {
     id: enrollment.id,
+    cohortId: enrollment.cohortId,
     courseTitle: enrollment.courseTitle,
     cohortTitle: enrollment.cohortTitle,
     status: enrollment.status,
@@ -795,6 +804,7 @@ export async function getAdminCompletionCandidates(): Promise<AdminCompletionCan
 
 export type AdminOperationsData = {
   courses: Array<{ id: string; title: string }>;
+  revisions: Array<{ id: string; courseId: string; label: string }>;
   cohorts: Array<{ id: string; title: string; courseId: string; status: CohortCard["status"] }>;
   enrollments: Array<{ id: string; label: string }>;
   sessions: Array<{ id: string; cohortId: string; label: string }>;
@@ -806,17 +816,19 @@ export async function getAdminOperationsData(): Promise<AdminOperationsData> {
     return canUseDemoData({ nodeEnv: process.env.NODE_ENV, demoRequested: true })
       ? {
           courses: [{ id: "00000000-0000-4000-8000-000000000001", title: "AI Fundamentals" }],
+          revisions: [{ id: "00000000-0000-4000-8000-000000000501", courseId: "00000000-0000-4000-8000-000000000001", label: "AI Fundamentals · Revision 1" }],
           cohorts: demoCohorts.map((cohort) => ({ ...cohort, courseId: "00000000-0000-4000-8000-000000000001" })).map(({ id, title, courseId, status }) => ({ id, title, courseId, status })),
           enrollments: [{ id: demoEnrollment.id, label: "กาญจนา — AI Fundamentals" }],
           sessions: [{ id: "00000000-0000-4000-8000-000000000301", cohortId: demoCohorts[2].id, label: "Session 1 — AI วิเคราะห์ข้อมูล" }],
           submissions: [{ id: "00000000-0000-4000-8000-000000000401", label: "กาญจนา — แบบฝึกหัด 1" }],
         }
-      : { courses: [], cohorts: [], enrollments: [], sessions: [], submissions: [] };
+      : { courses: [], revisions: [], cohorts: [], enrollments: [], sessions: [], submissions: [] };
   }
 
   const db = getDb();
-  const [courseRows, cohortRows, enrollmentRows, sessionRows, submissionRows] = await Promise.all([
+  const [courseRows, revisionRows, cohortRows, enrollmentRows, sessionRows, submissionRows] = await Promise.all([
     db.select({ id: courseTable.id, title: courseTable.title }).from(courseTable).orderBy(asc(courseTable.title)),
+    db.select({ id: courseRevisions.id, courseId: courseRevisions.courseId, title: courseRevisions.title, revisionNumber: courseRevisions.revisionNumber }).from(courseRevisions).where(eq(courseRevisions.status, "approved")).orderBy(asc(courseRevisions.title)),
     db.select({ id: cohorts.id, title: cohorts.title, courseId: cohorts.courseId, status: cohorts.status }).from(cohorts).orderBy(asc(cohorts.startsAt)),
     db.select({ id: enrollments.id, learner: profiles.displayName, course: courseTable.title }).from(enrollments).innerJoin(profiles, eq(profiles.userId, enrollments.userId)).innerJoin(cohorts, eq(cohorts.id, enrollments.cohortId)).innerJoin(courseTable, eq(courseTable.id, cohorts.courseId)).orderBy(asc(profiles.displayName)),
     db.select({ id: liveSessions.id, cohortId: liveSessions.cohortId, title: liveSessions.title, cohort: cohorts.title }).from(liveSessions).innerJoin(cohorts, eq(cohorts.id, liveSessions.cohortId)).orderBy(asc(liveSessions.startsAt)),
@@ -825,6 +837,7 @@ export async function getAdminOperationsData(): Promise<AdminOperationsData> {
 
   return {
     courses: courseRows,
+    revisions: revisionRows.map((row) => ({ id: row.id, courseId: row.courseId, label: `${row.title} · Revision ${row.revisionNumber}` })),
     cohorts: cohortRows,
     enrollments: enrollmentRows.map((row) => ({ id: row.id, label: `${row.learner} — ${row.course}` })),
     sessions: sessionRows.map((row) => ({ id: row.id, cohortId: row.cohortId, label: `${row.title} — ${row.cohort}` })),
@@ -858,6 +871,10 @@ export async function getAdminCohorts(): Promise<CohortCard[]> {
     registrationDeadlineAt: cohort.registrationDeadlineAt,
     minimumEnrollment: cohort.minimumEnrollment,
     maximumEnrollment: cohort.maximumEnrollment,
+    admissionMode: cohort.admissionMode,
+    priceAmount: cohort.priceAmount,
+    currency: cohort.currency,
+    paymentDeadlineAt: cohort.paymentDeadlineAt,
     activeReservations: Number(activeReservations),
     waitlistedReservations: Number(waitlistedReservations),
     fallbackCohortId: cohort.fallbackCohortId,

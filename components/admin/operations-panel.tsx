@@ -47,6 +47,9 @@ export function AdminOperationsPanel({ data, demo }: { data: AdminOperationsData
           <summary>สร้างรุ่นเรียน</summary>
           <form action={createCohort} onSubmit={cohortDemo.onSubmit} className="admin-stack-form">
             <label>หลักสูตร<select name="courseId" required><option value="">เลือกหลักสูตร</option>{data.courses.map((course) => <option key={course.id} value={course.id}>{course.title}</option>)}</select></label>
+            <label>Revision ที่ขาย<select name="courseRevisionId"><option value="">เลือกภายหลัง (เฉพาะคอร์สฟรีเดิม)</option>{data.revisions.map((revision) => <option key={revision.id} value={revision.id}>{revision.label}</option>)}</select></label>
+            <label>Admission<select name="admissionMode" defaultValue="invite_only"><option value="invite_only">เฉพาะผู้ได้รับเชิญ</option><option value="public">เปิดจองสาธารณะ</option></select></label>
+            <label>ราคา (บาท)<input name="priceBaht" type="number" min="0" step="1" defaultValue="0" /></label>
             <label>ชื่อรุ่น<input name="title" required minLength={3} /></label>
             <label>เริ่มเรียน<input name="startsAt" type="datetime-local" required /></label>
             <label>จบเรียน<input name="endsAt" type="datetime-local" /></label>

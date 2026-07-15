@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const developmentEvalSource = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+
 const nextConfig: NextConfig = {
   devIndicators: false,
   poweredByHeader: false,
@@ -22,8 +24,7 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "DENY" },
           {
             key: "Content-Security-Policy",
-            value:
-              "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.neon.tech https://*.aws.neon.tech; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'",
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline'${developmentEvalSource}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.neon.tech https://*.aws.neon.tech; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'`,
           },
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
         ],

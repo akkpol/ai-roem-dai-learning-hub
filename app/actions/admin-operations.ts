@@ -36,6 +36,9 @@ export async function createCohortAction(_previous: AdminOperationState, formDat
     () =>
       createCohortByAdmin({
         courseId: String(formData.get("courseId")),
+        courseRevisionId: String(formData.get("courseRevisionId") || "") || undefined,
+        admissionMode: String(formData.get("admissionMode") || "invite_only") as "public" | "invite_only",
+        priceBaht: String(formData.get("priceBaht") || "0"),
         title: String(formData.get("title")),
         startsAt: String(formData.get("startsAt")),
         endsAt: String(formData.get("endsAt") || "") || undefined,

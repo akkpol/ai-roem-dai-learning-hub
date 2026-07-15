@@ -18,16 +18,62 @@ import {
 export const memberRole = pgEnum("member_role", ["student", "instructor", "admin"]);
 export const courseLevel = pgEnum("course_level", ["beginner", "applied", "expert"]);
 export const courseStatus = pgEnum("course_status", ["draft", "published", "archived"]);
+export const courseRevisionStatus = pgEnum("course_revision_status", [
+  "draft",
+  "in_review",
+  "changes_requested",
+  "approved",
+  "retired",
+]);
 export const completionPolicy = pgEnum("completion_policy", ["automatic", "admin_approval"]);
 export const cohortStatus = pgEnum("cohort_status", [
   "draft",
   "collecting",
   "threshold_met",
+  "payment_collecting",
   "confirmed",
   "in_progress",
   "completed",
   "postponed",
   "cancelled",
+]);
+export const cohortAdmissionMode = pgEnum("cohort_admission_mode", ["public", "invite_only"]);
+export const orderStatus = pgEnum("order_status", [
+  "pending",
+  "paid",
+  "expired",
+  "payment_failed",
+  "refund_pending",
+  "refunded",
+]);
+export const checkoutSessionStatus = pgEnum("checkout_session_status", [
+  "open",
+  "complete",
+  "expired",
+]);
+export const refundStatus = pgEnum("refund_status", [
+  "requested",
+  "approved",
+  "processing",
+  "succeeded",
+  "failed",
+  "rejected",
+]);
+export const refundReason = pgEnum("refund_reason", [
+  "learner_request",
+  "platform_cancellation",
+  "late_payment",
+]);
+export const webhookEventStatus = pgEnum("webhook_event_status", [
+  "received",
+  "processed",
+  "failed",
+  "ignored",
+]);
+export const communityThreadStatus = pgEnum("community_thread_status", [
+  "open",
+  "resolved",
+  "locked",
 ]);
 export const inviteStatus = pgEnum("invite_status", ["pending", "accepted", "revoked", "expired"]);
 export const reservationStatus = pgEnum("reservation_status", [
@@ -76,14 +122,34 @@ export const profiles = pgTable(
   (table) => [uniqueIndex("profiles_email_unique").on(sql`lower(${table.email})`)],
 );
 
-export const instructors = pgTable("instructors", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  profileUserId: text("profile_user_id").references(() => profiles.userId, { onDelete: "set null" }),
-  name: text("name").notNull(),
-  bio: text("bio"),
-  avatarUrl: text("avatar_url"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const memberRoles = pgTable(
+  "member_roles",
+  {
+    userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
+    role: memberRole("role").notNull(),
+    grantedByUserId: text("granted_by_user_id").references((): AnyPgColumn => profiles.userId, {
+      onDelete: "set null",
+    }),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.role] }),
+    index("member_roles_role_idx").on(table.role, table.userId),
+  ],
+);
+
+export const instructors = pgTable(
+  "instructors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    profileUserId: text("profile_user_id").references(() => profiles.userId, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    bio: text("bio"),
+    avatarUrl: text("avatar_url"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("instructors_profile_user_unique").on(table.profileUserId)],
+);
 
 export const courses = pgTable(
   "courses",
@@ -142,13 +208,96 @@ export const courseInstructors = pgTable(
   (table) => [primaryKey({ columns: [table.courseId, table.instructorId] })],
 );
 
+export const courseRevisions = pgTable(
+  "course_revisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    revisionNumber: integer("revision_number").notNull(),
+    status: courseRevisionStatus("status").notNull().default("draft"),
+    version: integer("version").notNull().default(1),
+    title: text("title").notNull(),
+    summary: text("summary").notNull(),
+    coverUrl: text("cover_url"),
+    durationMinutes: integer("duration_minutes").notNull().default(0),
+    certificateEnabled: boolean("certificate_enabled").notNull().default(true),
+    completionPolicy: completionPolicy("completion_policy").notNull().default("automatic"),
+    createdByUserId: text("created_by_user_id").references(() => profiles.userId, {
+      onDelete: "set null",
+    }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => profiles.userId, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNotes: text("review_notes"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("course_revisions_course_number_unique").on(
+      table.courseId,
+      table.revisionNumber,
+    ),
+    index("course_revisions_review_queue_idx").on(table.status, table.submittedAt),
+    check("course_revisions_number_positive", sql`${table.revisionNumber} > 0`),
+    check("course_revisions_version_positive", sql`${table.version} > 0`),
+    check("course_revisions_duration_nonnegative", sql`${table.durationMinutes} >= 0`),
+  ],
+);
+
+export const courseModules = pgTable(
+  "course_modules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    revisionId: uuid("revision_id").notNull().references(() => courseRevisions.id, {
+      onDelete: "cascade",
+    }),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    sortOrder: integer("sort_order").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("course_modules_revision_sort_unique").on(table.revisionId, table.sortOrder),
+    check("course_modules_sort_nonnegative", sql`${table.sortOrder} >= 0`),
+  ],
+);
+
+export const courseAuthors = pgTable(
+  "course_authors",
+  {
+    courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
+    assignedByUserId: text("assigned_by_user_id").references((): AnyPgColumn => profiles.userId, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.courseId, table.userId] }),
+    index("course_authors_user_idx").on(table.userId, table.courseId),
+  ],
+);
+
 export const cohorts = pgTable(
   "cohorts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    courseRevisionId: uuid("course_revision_id").references(() => courseRevisions.id, {
+      onDelete: "restrict",
+    }),
     title: text("title").notNull(),
     status: cohortStatus("status").notNull().default("draft"),
+    admissionMode: cohortAdmissionMode("admission_mode").notNull().default("invite_only"),
+    priceAmount: integer("price_amount").notNull().default(0),
+    currency: text("currency").notNull().default("THB"),
+    paymentWindowHours: integer("payment_window_hours").notNull().default(48),
+    paymentOpenedAt: timestamp("payment_opened_at", { withTimezone: true }),
+    paymentDeadlineAt: timestamp("payment_deadline_at", { withTimezone: true }),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }),
     minimumEnrollment: integer("minimum_enrollment").notNull(),
@@ -180,6 +329,25 @@ export const cohorts = pgTable(
       "cohorts_registration_window_valid",
       sql`${table.registrationOpensAt} <= ${table.registrationDeadlineAt}`,
     ),
+    check("cohorts_price_nonnegative", sql`${table.priceAmount} >= 0`),
+    check("cohorts_currency_thb", sql`upper(${table.currency}) = 'THB'`),
+    check("cohorts_payment_window_48_hours", sql`${table.paymentWindowHours} = 48`),
+  ],
+);
+
+export const cohortInstructors = pgTable(
+  "cohort_instructors",
+  {
+    cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+    userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
+    assignedByUserId: text("assigned_by_user_id").references((): AnyPgColumn => profiles.userId, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.cohortId, table.userId] }),
+    index("cohort_instructors_user_idx").on(table.userId, table.cohortId),
   ],
 );
 
@@ -223,7 +391,10 @@ export const seatReservations = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
-    inviteId: uuid("invite_id").notNull().references(() => courseInvites.id, { onDelete: "restrict" }),
+    inviteId: uuid("invite_id").references(() => courseInvites.id, { onDelete: "restrict" }),
+    admissionModeSnapshot: cohortAdmissionMode("admission_mode_snapshot")
+      .notNull()
+      .default("invite_only"),
     userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
     status: reservationStatus("status").notNull().default("active"),
     proposedStartsAt: timestamp("proposed_starts_at", { withTimezone: true }).notNull(),
@@ -242,6 +413,10 @@ export const seatReservations = pgTable(
       .on(table.userId, table.cohortId)
       .where(sql`${table.status} = 'active'`),
     index("seat_reservations_cohort_status_idx").on(table.cohortId, table.status, table.reservedAt),
+    check(
+      "seat_reservations_invite_only_requires_invite",
+      sql`${table.admissionModeSnapshot} <> 'invite_only' or ${table.inviteId} is not null`,
+    ),
   ],
 );
 
@@ -250,6 +425,8 @@ export const lessons = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").references(() => courseRevisions.id, { onDelete: "cascade" }),
+    moduleId: uuid("module_id").references(() => courseModules.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     kind: lessonKind("kind").notNull(),
     sortOrder: integer("sort_order").notNull(),
@@ -259,7 +436,12 @@ export const lessons = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("lessons_course_sort_unique").on(table.courseId, table.sortOrder),
+    uniqueIndex("lessons_course_sort_unique")
+      .on(table.courseId, table.sortOrder)
+      .where(sql`${table.revisionId} is null`),
+    uniqueIndex("lessons_revision_sort_unique")
+      .on(table.revisionId, table.sortOrder)
+      .where(sql`${table.revisionId} is not null`),
     check("lessons_duration_nonnegative", sql`${table.durationMinutes} >= 0`),
   ],
 );
@@ -270,7 +452,13 @@ export const enrollments = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "cascade" }),
     cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+    courseRevisionId: uuid("course_revision_id").references(() => courseRevisions.id, {
+      onDelete: "restrict",
+    }),
     reservationId: uuid("reservation_id").notNull().references(() => seatReservations.id, {
+      onDelete: "restrict",
+    }),
+    orderId: uuid("order_id").references((): AnyPgColumn => orders.id, {
       onDelete: "restrict",
     }),
     status: enrollmentStatus("status").notNull().default("active"),
@@ -280,6 +468,7 @@ export const enrollments = pgTable(
   (table) => [
     uniqueIndex("enrollments_user_cohort_unique").on(table.userId, table.cohortId),
     uniqueIndex("enrollments_reservation_unique").on(table.reservationId),
+    uniqueIndex("enrollments_order_unique").on(table.orderId),
     index("enrollments_user_status_idx").on(table.userId, table.status),
   ],
 );
@@ -305,6 +494,7 @@ export const courseMaterials = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").references(() => courseRevisions.id, { onDelete: "cascade" }),
     lessonId: uuid("lesson_id").references(() => lessons.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     kind: materialKind("kind").notNull(),
@@ -395,6 +585,9 @@ export const assignments = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+    revisionId: uuid("revision_id").references(() => courseRevisions.id, { onDelete: "cascade" }),
+    moduleId: uuid("module_id").references(() => courseModules.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
     title: text("title").notNull(),
     instructions: text("instructions").notNull(),
     passingScore: integer("passing_score").notNull().default(70),
@@ -425,6 +618,165 @@ export const submissions = pgTable(
     uniqueIndex("submissions_assignment_enrollment_unique").on(table.assignmentId, table.enrollmentId),
     check("submissions_score_range", sql`${table.score} is null or ${table.score} between 0 and 100`),
   ],
+);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    reservationId: uuid("reservation_id").notNull().references(() => seatReservations.id, {
+      onDelete: "restrict",
+    }),
+    userId: text("user_id").notNull().references(() => profiles.userId, { onDelete: "restrict" }),
+    cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "restrict" }),
+    status: orderStatus("status").notNull().default("pending"),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    policySnapshot: jsonb("policy_snapshot").$type<{
+      refundVersion: string;
+      refundableUntil: string | null;
+      priceLabel: string;
+    }>().notNull(),
+    paymentDeadlineAt: timestamp("payment_deadline_at", { withTimezone: true }).notNull(),
+    providerPaymentIntentId: text("provider_payment_intent_id"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    expiredAt: timestamp("expired_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("orders_reservation_unique").on(table.reservationId),
+    uniqueIndex("orders_provider_payment_intent_unique").on(table.providerPaymentIntentId),
+    index("orders_status_deadline_idx").on(table.status, table.paymentDeadlineAt),
+    check("orders_amount_positive", sql`${table.amount} > 0`),
+    check("orders_currency_thb", sql`upper(${table.currency}) = 'THB'`),
+  ],
+);
+
+export const checkoutSessions = pgTable(
+  "checkout_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    providerSessionId: text("provider_session_id").notNull(),
+    status: checkoutSessionStatus("status").notNull().default("open"),
+    checkoutUrl: text("checkout_url"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("checkout_sessions_provider_unique").on(table.providerSessionId),
+    index("checkout_sessions_order_status_idx").on(table.orderId, table.status),
+  ],
+);
+
+export const refunds = pgTable(
+  "refunds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id").notNull().references(() => orders.id, { onDelete: "restrict" }),
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    reason: refundReason("reason").notNull(),
+    status: refundStatus("status").notNull().default("requested"),
+    requestedByUserId: text("requested_by_user_id").references(() => profiles.userId, {
+      onDelete: "set null",
+    }),
+    approvedByUserId: text("approved_by_user_id").references(() => profiles.userId, {
+      onDelete: "set null",
+    }),
+    providerRefundId: text("provider_refund_id"),
+    failureMessage: text("failure_message"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("refunds_order_reason_unique").on(table.orderId, table.reason),
+    uniqueIndex("refunds_provider_unique").on(table.providerRefundId),
+    index("refunds_status_created_idx").on(table.status, table.createdAt),
+    check("refunds_amount_positive", sql`${table.amount} > 0`),
+    check("refunds_currency_thb", sql`upper(${table.currency}) = 'THB'`),
+  ],
+);
+
+export const providerWebhookEvents = pgTable(
+  "provider_webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull().default("stripe"),
+    providerEventId: text("provider_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    status: webhookEventStatus("status").notNull().default("received"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    errorMessage: text("error_message"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("provider_webhook_events_provider_event_unique").on(
+      table.provider,
+      table.providerEventId,
+    ),
+    index("provider_webhook_events_status_idx").on(table.status, table.receivedAt),
+  ],
+);
+
+export const cohortAnnouncements = pgTable(
+  "cohort_announcements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").notNull().references(() => profiles.userId, {
+      onDelete: "restrict",
+    }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    pinned: boolean("pinned").notNull().default(false),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("cohort_announcements_cohort_idx").on(table.cohortId, table.pinned, table.publishedAt)],
+);
+
+export const cohortThreads = pgTable(
+  "cohort_threads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cohortId: uuid("cohort_id").notNull().references(() => cohorts.id, { onDelete: "cascade" }),
+    authorUserId: text("author_user_id").notNull().references(() => profiles.userId, {
+      onDelete: "restrict",
+    }),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    status: communityThreadStatus("status").notNull().default("open"),
+    pinned: boolean("pinned").notNull().default(false),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("cohort_threads_cohort_status_idx").on(table.cohortId, table.status, table.pinned, table.updatedAt),
+  ],
+);
+
+export const cohortThreadReplies = pgTable(
+  "cohort_thread_replies",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    threadId: uuid("thread_id").notNull().references(() => cohortThreads.id, {
+      onDelete: "cascade",
+    }),
+    authorUserId: text("author_user_id").notNull().references(() => profiles.userId, {
+      onDelete: "restrict",
+    }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("cohort_thread_replies_thread_idx").on(table.threadId, table.createdAt)],
 );
 
 export const enrollmentCompletions = pgTable(

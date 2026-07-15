@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-15
 
-**Current stage:** SESSION-002 ready for implementation
+**Current stage:** SESSION-002 awaiting Lead review
 
 **Active work package:** WP-01 Platform Foundation and Identity
 
@@ -44,6 +44,12 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 | WP-09 | Reviews, Communications and Notifications | WP-06 | `not_started` | Verified review และ notification retry/dedupe ผ่าน integration tests |
 | WP-10 | Trust, Safety, Finance Operations and Analytics | WP-05, WP-08, WP-09 | `not_started` | Moderation, dispute, payout operations และ audited reporting พร้อมใช้ |
 | WP-11 | Production Launch Readiness | WP-01—WP-10 | `not_started` | Security, performance, accessibility, backup/restore และ launch runbook ผ่าน |
+
+## Session checkpoints
+
+| Session | Work package | Status | Checkpoint |
+|---|---|---|---|
+| SESSION-002 | WP-01 | `review` | PostgreSQL platform foundation handoff submitted; WP-01 remains `planned` until all required sessions pass Lead review. |
 
 ## Project-wide gates
 

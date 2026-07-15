@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-15
 
-**Current stage:** WP-01 design
+**Current stage:** WP-01 design review
 
 **Active work package:** WP-01 Platform Foundation and Identity
 
@@ -73,4 +73,4 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 
 ## Next control action
 
-ออกแบบและอนุมัติ subsystem spec สำหรับ WP-01 Platform Foundation and Identity ก่อนเขียน implementation plan และ Prompt Packet ถัดไป ห้ามเริ่ม coding session ของ WP-01 จนกว่า contract ด้าน identity, session และ authorization จะชัดเจน
+เจ้าของตรวจ Design Spec `docs/superpowers/specs/2026-07-15-platform-foundation-and-identity-design.md` ก่อนเปลี่ยน WP-01 เป็น `spec_ready` และเขียน implementation plan ห้ามเริ่ม coding session ของ WP-01 ก่อน spec ฉบับเขียนจริงได้รับการยืนยัน

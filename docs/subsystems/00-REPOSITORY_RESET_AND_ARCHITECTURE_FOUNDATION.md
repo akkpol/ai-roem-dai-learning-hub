@@ -1,6 +1,6 @@
 # WP-00 Repository Reset and Architecture Foundation
 
-**Status:** Spec ready
+**Status:** Verified
 
 **Goal:** ลบ runtime ของ AI Closed Beta และสร้างฐาน repo ที่เป็นกลาง บังคับ architecture boundaries และผ่าน CI โดยยังไม่สร้าง business feature
 

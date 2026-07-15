@@ -6,7 +6,7 @@
 
 **Architecture:** Keep a single Next.js application but move source code under `src/` and reserve `src/modules/` for bounded contexts. This work package deliberately contains no product domain, database, auth, payment, email, storage, or deployment integration; it creates the safe foundation that later vertical slices consume.
 
-**Tech Stack:** Node.js 22, Next.js 16, React 19, TypeScript 5.9, Zod 4, Vitest 4, ESLint 9, GitHub Actions, Vercel
+**Tech Stack:** Node.js 24, Next.js 16, React 19, TypeScript 5.9, Zod 4, Vitest 4, ESLint 9, GitHub Actions, Vercel
 
 ## Global Constraints
 
@@ -34,7 +34,7 @@
 - Modify: `next.config.ts`
 
 **Interfaces:**
-- Consumes: Node.js 22 and the repository root
+- Consumes: Node.js 24 and the repository root
 - Produces: scripts `architecture`, `dev`, `build`, `start`, `lint`, `typecheck`, `test`, and `test:watch`; alias `@/* -> src/*`
 
 - [ ] **Step 1: Replace `package.json` with the neutral dependency contract**
@@ -45,7 +45,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "22.x"
+    "node": "24.x"
   },
   "scripts": {
     "architecture": "node scripts/check-architecture.mjs",
@@ -556,7 +556,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.13.0
+          node-version: 24.18.0
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run architecture

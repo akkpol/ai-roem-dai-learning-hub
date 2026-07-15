@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-07-15
 
-**Current stage:** Execution planning
+**Current stage:** Architecture foundation verified
 
-**Active work package:** WP-00 Repository Reset and Architecture Foundation
+**Active work package:** None; WP-01 design is next
 
 ## Status model
 
@@ -32,7 +32,7 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 
 | ID | Work package | Depends on | Status | Exit gate |
 |---|---|---|---|---|
-| WP-00 | Repository Reset and Architecture Foundation | Product/System Design | `planned` | ไม่มี legacy runtime, build/test/architecture/CI ผ่าน |
+| WP-00 | Repository Reset and Architecture Foundation | Product/System Design | `verified` | ไม่มี legacy runtime, build/test/architecture/CI ผ่าน |
 | WP-01 | Platform Foundation and Identity | WP-00 | `not_started` | Authentication, profile, session, authorization และ readiness ผ่าน E2E |
 | WP-02 | Organizations and Instructor Verification | WP-01 | `not_started` | Organization membership และ instructor review workflow ผ่าน E2E |
 | WP-03 | Taxonomy, Catalog Authoring and Moderation | WP-02 | `not_started` | ผู้สอนสร้าง version และ reviewer publish ได้โดยไม่ข้ามสิทธิ์ |
@@ -67,8 +67,10 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 - No Production users or data require migration
 - Product/system source of truth committed at `e5077d2`
 - Legacy documentation removed
-- Runtime code remains legacy until WP-00 is verified
+- WP-00 implementation accepted at `cbdf0fa` after independent Lead review
+- Clean install, architecture, lint, typecheck, 5 tests, production build และ local HTTP smoke ผ่านบน Node 24.18.0
+- Dependency audit ไม่มี high หรือ critical advisory; moderate advisory จาก PostCSS ที่ Next.js 16.2.10 ตรึงไว้ต้องติดตามเมื่อ Next.js ออกรุ่นแก้ไข
 
 ## Next control action
 
-Create a fresh Codex Coding Session with an isolated worktree on `codex/wp-00-repository-reset`, then issue Session Prompt `SESSION-001`. Do not begin WP-01 until WP-00 handoff has been independently reviewed.
+ออกแบบและอนุมัติ subsystem spec สำหรับ WP-01 Platform Foundation and Identity ก่อนเขียน implementation plan และ Prompt Packet ถัดไป ห้ามเริ่ม coding session ของ WP-01 จนกว่า contract ด้าน identity, session และ authorization จะชัดเจน

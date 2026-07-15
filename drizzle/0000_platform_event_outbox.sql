@@ -30,11 +30,14 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 --> statement-breakpoint
 GRANT USAGE ON SCHEMA public TO learning_hub_app;
 --> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE, DELETE
-  ON TABLE platform_event_outbox, platform_event_consumptions TO learning_hub_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM learning_hub_app;
 --> statement-breakpoint
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO learning_hub_app;
+  REVOKE USAGE, SELECT ON SEQUENCES FROM learning_hub_app;
 --> statement-breakpoint
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT USAGE, SELECT ON SEQUENCES TO learning_hub_app;
+GRANT INSERT ON TABLE platform_event_outbox TO learning_hub_app;
+--> statement-breakpoint
+GRANT INSERT ON TABLE platform_event_consumptions TO learning_hub_app;
+--> statement-breakpoint
+GRANT SELECT (event_id) ON TABLE platform_event_consumptions TO learning_hub_app;

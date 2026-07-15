@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const remoteTlsModes = new Set(["require", "verify-ca", "verify-full"]);
+
 const integer = (fallback: number, min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).default(fallback);
 
@@ -29,6 +32,7 @@ export function readDatabaseConfig(
   input: Record<string, string | undefined>,
 ): DatabaseConfig {
   const value = schema.parse(input);
+  assertPostgresUrlTls(value.DATABASE_URL, "DATABASE_URL");
 
   return {
     url: value.DATABASE_URL,
@@ -37,4 +41,18 @@ export function readDatabaseConfig(
     idleTimeoutMs: value.DATABASE_IDLE_TIMEOUT_MS,
     queryTimeoutMs: value.DATABASE_QUERY_TIMEOUT_MS,
   };
+}
+
+export function assertPostgresUrlTls(value: string, variableName: string): void {
+  const parsed = new URL(value);
+  if (loopbackHosts.has(parsed.hostname.toLowerCase())) {
+    return;
+  }
+
+  const tlsModes = parsed.searchParams.getAll("sslmode");
+  if (tlsModes.length !== 1 || !remoteTlsModes.has(tlsModes[0])) {
+    throw new Error(
+      `${variableName} must enforce TLS for remote PostgreSQL hosts`,
+    );
+  }
 }

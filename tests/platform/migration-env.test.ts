@@ -31,4 +31,51 @@ describe("readMigrationDatabaseUrl", () => {
       MIGRATION_DATABASE_URL: "postgresql://migrator:migration-secret@ep-pooler.example.com/learning_hub_test?sslmode=require",
     })).toContain("migrator");
   });
+
+  it.each([undefined, "disable", "allow", "prefer"])(
+    "rejects a remote migration URL with sslmode=%s",
+    (sslmode) => {
+      const query = sslmode ? `?sslmode=${sslmode}` : "";
+      expect(() => readMigrationDatabaseUrl({
+        DATABASE_URL:
+          "postgresql://app:app-secret@ep-pooler.example.com/learning_hub_test?sslmode=require",
+        MIGRATION_DATABASE_URL:
+          `postgresql://migrator:migration-secret@ep-direct.example.com/learning_hub_test${query}`,
+      })).toThrow(/TLS/);
+    },
+  );
+
+  it.each(["require", "verify-ca", "verify-full"])(
+    "accepts a remote migration URL with sslmode=%s",
+    (sslmode) => {
+      const migrationUrl =
+        "postgresql://migrator:migration-secret@ep-direct.example.com/" +
+        `learning_hub_test?sslmode=${sslmode}`;
+      expect(readMigrationDatabaseUrl({
+        DATABASE_URL:
+          "postgresql://app:app-secret@ep-pooler.example.com/learning_hub_test?sslmode=require",
+        MIGRATION_DATABASE_URL: migrationUrl,
+      })).toBe(migrationUrl);
+    },
+  );
+
+  it("rejects a remote application URL without TLS in migration configuration", () => {
+    expect(() => readMigrationDatabaseUrl({
+      DATABASE_URL:
+        "postgresql://app:app-secret@ep-pooler.example.com/learning_hub_test",
+      MIGRATION_DATABASE_URL:
+        "postgresql://migrator:migration-secret@ep-direct.example.com/learning_hub_test?sslmode=require",
+    })).toThrow(/TLS/);
+  });
+
+  it.each(["localhost", "127.0.0.1", "[::1]"])(
+    "allows exact loopback host %s without sslmode",
+    (hostname) => {
+      expect(readMigrationDatabaseUrl({
+        DATABASE_URL: `postgresql://app:secret@${hostname}/learning_hub_test`,
+        MIGRATION_DATABASE_URL:
+          `postgresql://migrator:secret@${hostname}/learning_hub_test`,
+      })).toContain("migrator");
+    },
+  );
 });

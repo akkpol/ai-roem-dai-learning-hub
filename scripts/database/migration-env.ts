@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { assertPostgresUrlTls } from "../../src/platform/database/config";
+
 const postgresUrl = z.string().url().refine((value) => {
   const protocol = new URL(value).protocol;
   return protocol === "postgres:" || protocol === "postgresql:";
@@ -10,6 +12,8 @@ export function readMigrationDatabaseUrl(
 ): string {
   const databaseUrl = postgresUrl.parse(input.DATABASE_URL);
   const migrationUrl = postgresUrl.parse(input.MIGRATION_DATABASE_URL);
+  assertPostgresUrlTls(databaseUrl, "DATABASE_URL");
+  assertPostgresUrlTls(migrationUrl, "MIGRATION_DATABASE_URL");
 
   if (databaseUrl === migrationUrl) {
     throw new Error("MIGRATION_DATABASE_URL must be separate from DATABASE_URL");

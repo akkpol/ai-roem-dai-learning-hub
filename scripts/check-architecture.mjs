@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const forbiddenRoots = ["app", "components", "db", "lib"];
-const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs"]);
+const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".cjs", ".mjs", ".cts", ".mts"]);
 
 function walk(directory) {
   if (!existsSync(directory)) return [];

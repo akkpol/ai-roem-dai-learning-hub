@@ -54,4 +54,10 @@ describe("checkArchitecture", () => {
     );
     expect(checkArchitecture(root)[0]).toMatch(/Migration runner is forbidden/);
   });
+
+  it("rejects migration credentials in CommonJS TypeScript runtime source", () => {
+    const root = fixture();
+    write(root, "src/platform/database/client.cts", "void process.env.MIGRATION_DATABASE_URL;");
+    expect(checkArchitecture(root)[0]).toMatch(/Migration credential is forbidden/);
+  });
 });

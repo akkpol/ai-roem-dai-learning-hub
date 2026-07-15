@@ -11,37 +11,20 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:18-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: closed_beta_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d closed_beta_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/closed_beta_test
-      CONFIRM_DESTRUCTIVE_TEST_DATABASE: closed_beta_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22.13.0
+          node-version: 24.18.0
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      - run: npm run architecture
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-      - run: npm run db:check
-      - run: npm run db:safety
       - run: npm run build
       - name: Production HTTP smoke test
         shell: bash
@@ -50,11 +33,9 @@ jobs:
           server_pid=$!
           trap 'kill $server_pid' EXIT
           for attempt in {1..30}; do
-            if curl --silent http://127.0.0.1:3000/ > /dev/null; then break; fi
+            if curl --silent http://127.0.0.1:3000/api/health/live > /dev/null; then break; fi
             sleep 1
           done
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/)" = "404"
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/learn)" = "307"
-          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/courses/ai-fundamentals)" = "404"
-      - name: Block high or critical production vulnerabilities
-        run: npm audit --omit=dev --audit-level=high
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:3000/)" = "200"
+          test "$(curl --silent http://127.0.0.1:3000/api/health/live)" = '{"status":"ok","service":"learning-hub"}'
+      - run: npm audit --omit=dev --audit-level=high

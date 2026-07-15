@@ -20,7 +20,7 @@ Owner direction supersedes the earlier local-database design: SESSION-002 uses p
 - `npm run architecture`: exit 0.
 - `npm run lint`: exit 0.
 - `npm run typecheck`: exit 0.
-- `npm test`: exit 0; 8 test files and 22 tests passed.
+- `npm test`: exit 0; 8 test files and 24 tests passed.
 - `npm run build`: exit 0 on Next.js 16.2.10; routes include `/`, `/_not-found`, `/api/health/live`, and `/api/health/ready`.
 - `npm audit --omit=dev --audit-level=high`: exit 0. npm reported 2 moderate PostCSS advisories; no high or critical advisory met the configured failure threshold.
 

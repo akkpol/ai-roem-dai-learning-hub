@@ -46,6 +46,6 @@ Owner direction supersedes the earlier local-database design: SESSION-002 uses p
 ## Risks and review notes
 
 - A reviewer must obtain a real GitHub Actions run, Neon temporary-branch evidence, and Vercel Preview evidence before treating the PostgreSQL integration path as accepted.
-- The CI Neon migration and integration commands fail closed unless the approved external URLs both target `learning_hub_session_002_test` and the acknowledgement exactly matches that name; they are unobserved here because no remote CI run was triggered.
+- The CI Neon migration and integration commands fail closed unless the approved external URLs both target `learning_hub_session_002_test` and the acknowledgement exactly matches that name. Every destructive integration reset, including a localhost URL, requires this acknowledgement; they are unobserved here because no remote CI run was triggered.
 - `npm audit --omit=dev --audit-level=high` does not fail, but npm reports two moderate PostCSS advisories through the current Next.js dependency chain; the offered automated remediation is a breaking downgrade and was not applied.
 - No secrets, connection strings, migration credentials, external deployment, or remote database state are recorded in this handoff.

@@ -9,10 +9,9 @@ export function assertSafeIntegrationReset(
 ): void {
   const parsed = new URL(url);
   const name = parsed.pathname.slice(1);
-  const local = ["localhost", "127.0.0.1"].includes(parsed.hostname);
   const remoteAck = input.REMOTE_TEST_DATABASE_RESET_ACK === name;
 
-  if (!name.endsWith("_test") || (!local && !remoteAck)) {
+  if (!name.endsWith("_test") || !remoteAck) {
     throw new Error("Refusing destructive integration reset");
   }
 }

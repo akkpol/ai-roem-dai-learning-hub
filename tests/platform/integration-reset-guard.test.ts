@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { assertSafeIntegrationReset } from "../integration/database/global-setup";
 
 describe("assertSafeIntegrationReset", () => {
-  it("allows a local test database", () => {
+  it("rejects a local test database without its exact acknowledgement", () => {
     expect(() => assertSafeIntegrationReset(
       "postgresql://migrator:secret@127.0.0.1/learning_hub_test",
       {},
-    )).not.toThrow();
+    )).toThrow("Refusing destructive integration reset");
   });
 
   it("rejects a remote test database without the exact acknowledgement", () => {

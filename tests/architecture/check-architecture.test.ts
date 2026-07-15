@@ -38,4 +38,20 @@ describe("checkArchitecture", () => {
     );
     expect(checkArchitecture(root)[0]).toMatch(/Deep cross-module import is forbidden/);
   });
+
+  it("rejects migration credentials in runtime source", () => {
+    const root = fixture();
+    write(root, "src/platform/database/client.ts", "void process.env.MIGRATION_DATABASE_URL;");
+    expect(checkArchitecture(root)[0]).toMatch(/Migration credential is forbidden/);
+  });
+
+  it("rejects migration runners in runtime source", () => {
+    const root = fixture();
+    write(
+      root,
+      "src/platform/database/client.ts",
+      'import { migrate } from "drizzle-orm/node-postgres/migrator"; void migrate;',
+    );
+    expect(checkArchitecture(root)[0]).toMatch(/Migration runner is forbidden/);
+  });
 });

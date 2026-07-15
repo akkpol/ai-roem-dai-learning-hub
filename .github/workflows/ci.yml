@@ -36,7 +36,19 @@ jobs:
           test -n "$DATABASE_URL"
           test -n "$MIGRATION_DATABASE_URL"
           test -n "$REMOTE_TEST_DATABASE_RESET_ACK"
+          readonly expected_database="learning_hub_session_002_test"
+          test "$REMOTE_TEST_DATABASE_RESET_ACK" = "$expected_database"
           test "$DATABASE_URL" != "$MIGRATION_DATABASE_URL"
+          node --input-type=module <<'EOF'
+          const expectedDatabase = "learning_hub_session_002_test";
+          for (const value of [process.env.DATABASE_URL, process.env.MIGRATION_DATABASE_URL]) {
+            try {
+              if (new URL(value).pathname.slice(1) !== expectedDatabase) process.exit(1);
+            } catch {
+              process.exit(1);
+            }
+          }
+          EOF
           npm run db:migrate
           npm run test:integration
       - name: Production HTTP smoke test

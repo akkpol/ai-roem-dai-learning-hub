@@ -20,7 +20,7 @@ Owner direction supersedes the earlier local-database design: SESSION-002 uses p
 - `npm run architecture`: exit 0.
 - `npm run lint`: exit 0.
 - `npm run typecheck`: exit 0.
-- `npm test`: exit 0; 8 test files and 21 tests passed.
+- `npm test`: exit 0; 8 test files and 22 tests passed.
 - `npm run build`: exit 0 on Next.js 16.2.10; routes include `/`, `/_not-found`, `/api/health/live`, and `/api/health/ready`.
 - `npm audit --omit=dev --audit-level=high`: exit 0. npm reported 2 moderate PostCSS advisories; no high or critical advisory met the configured failure threshold.
 
@@ -28,7 +28,7 @@ Owner direction supersedes the earlier local-database design: SESSION-002 uses p
 
 - Local PostgreSQL bootstrap, migration, integration suite, and production readiness smoke: **NOT APPLICABLE**. SESSION-002 acceptance uses production-derived Neon branches only; no local database runtime is supported.
 - GitHub Actions Neon migration, integration suite, and smoke gate: **NOT RUN**. The workflow requires externally configured Neon test-branch URLs and acknowledgement; this coding session did not create a PR or push a run, so no CI URL or result exists yet.
-- Neon production-derived temporary test branch: migration completed and `npm run test:integration` passed (3 test files, 4 tests). No URL, credential, or connection string is recorded. Privilege/schema inspection and branch cleanup: **NOT RUN**.
+- Neon production-derived temporary test branch: migration completed and `npm run test:integration` passed (3 test files, 4 tests). No URL, credential, or connection string is recorded. Temporary-branch cleanup completed after evidence; privilege/schema inspection: **NOT RUN**.
 - Vercel Preview build, liveness/readiness requests, runtime-log inspection, and Preview URL: **NOT RUN**. No Preview deployment was requested.
 
 ## Neon operator bootstrap contract
@@ -46,6 +46,6 @@ Owner direction supersedes the earlier local-database design: SESSION-002 uses p
 ## Risks and review notes
 
 - A reviewer must obtain a real GitHub Actions run, Neon temporary-branch evidence, and Vercel Preview evidence before treating the PostgreSQL integration path as accepted.
-- The CI Neon migration and integration commands fail closed when the approved external URLs or acknowledgement are absent; they are unobserved here because no remote CI run was triggered.
+- The CI Neon migration and integration commands fail closed unless the approved external URLs both target `learning_hub_session_002_test` and the acknowledgement exactly matches that name; they are unobserved here because no remote CI run was triggered.
 - `npm audit --omit=dev --audit-level=high` does not fail, but npm reports two moderate PostCSS advisories through the current Next.js dependency chain; the offered automated remediation is a breaking downgrade and was not applied.
 - No secrets, connection strings, migration credentials, external deployment, or remote database state are recorded in this handoff.

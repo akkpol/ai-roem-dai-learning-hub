@@ -2,6 +2,7 @@ import { z } from "zod";
 
 const loopbackHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 const remoteTlsModes = new Set(["require", "verify-ca", "verify-full"]);
+const approvedQueryOptions = new Set(["sslmode", "channel_binding"]);
 
 const integer = (fallback: number, min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).default(fallback);
@@ -45,14 +46,37 @@ export function readDatabaseConfig(
 
 export function assertPostgresUrlTls(value: string, variableName: string): void {
   const parsed = new URL(value);
-  if (loopbackHosts.has(parsed.hostname.toLowerCase())) {
-    return;
+  for (const key of parsed.searchParams.keys()) {
+    if (!approvedQueryOptions.has(key)) {
+      throw new Error(`${variableName} contains a forbidden PostgreSQL option`);
+    }
   }
 
   const tlsModes = parsed.searchParams.getAll("sslmode");
-  if (tlsModes.length !== 1 || !remoteTlsModes.has(tlsModes[0])) {
+  if (
+    tlsModes.length > 1 ||
+    (tlsModes.length === 1 && !remoteTlsModes.has(tlsModes[0]))
+  ) {
     throw new Error(
       `${variableName} must enforce TLS for remote PostgreSQL hosts`,
     );
   }
+
+  const channelBindings = parsed.searchParams.getAll("channel_binding");
+  if (
+    channelBindings.length > 1 ||
+    (channelBindings.length === 1 && channelBindings[0] !== "require")
+  ) {
+    throw new Error(`${variableName} contains a forbidden PostgreSQL option`);
+  }
+
+  if (!loopbackHosts.has(parsed.hostname.toLowerCase()) && tlsModes.length !== 1) {
+    throw new Error(
+      `${variableName} must enforce TLS for remote PostgreSQL hosts`,
+    );
+  }
+}
+
+export function isLoopbackPostgresUrl(value: string): boolean {
+  return loopbackHosts.has(new URL(value).hostname.toLowerCase());
 }

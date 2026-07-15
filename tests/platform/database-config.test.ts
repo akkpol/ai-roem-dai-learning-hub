@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parse as parsePostgresConnectionString } from "pg-connection-string";
 import { readDatabaseConfig } from "@/platform/database/config";
 
 describe("readDatabaseConfig", () => {
@@ -62,4 +63,48 @@ describe("readDatabaseConfig", () => {
       ).toThrow(/TLS/);
     },
   );
+
+  it("rejects a query host that overrides the validated URL authority", () => {
+    const url =
+      "postgresql://app:secret@localhost/learning_hub_test" +
+      "?host=remote.example.com";
+
+    expect(parsePostgresConnectionString(url).host).toBe("remote.example.com");
+    expect(() => readDatabaseConfig({ DATABASE_URL: url })).toThrow();
+  });
+
+  it.each(["hostaddr", "port", "dbname", "database", "user", "password", "ssl"])(
+    "rejects non-allowlisted PostgreSQL query option %s",
+    (option) => {
+      const url =
+        "postgresql://app:secret@db.example.com/learning_hub" +
+        `?sslmode=require&${option}=forbidden`;
+      expect(() => readDatabaseConfig({ DATABASE_URL: url })).toThrow();
+    },
+  );
+
+  it("allows the approved Neon channel binding option", () => {
+    const url =
+      "postgresql://app:secret@db.example.com/learning_hub" +
+      "?sslmode=verify-full&channel_binding=require";
+    expect(readDatabaseConfig({ DATABASE_URL: url }).url).toBe(url);
+  });
+
+  it("does not include a rejected URL or secret in its error message", () => {
+    const secret = "do-not-disclose";
+    const url =
+      `postgresql://app:${secret}@localhost/learning_hub_test` +
+      "?host=remote.example.com";
+
+    expect(() => readDatabaseConfig({ DATABASE_URL: url })).toThrowError(
+      expect.objectContaining({
+        message: expect.not.stringContaining(secret),
+      }),
+    );
+    try {
+      readDatabaseConfig({ DATABASE_URL: url });
+    } catch (error) {
+      expect(String(error)).not.toContain(url);
+    }
+  });
 });

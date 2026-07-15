@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { Client } from "pg";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
 import { createDatabaseConnection, type DatabaseConnection } from "@/platform/database/client";
@@ -10,16 +10,20 @@ import {
   enqueueDomainEvent,
   registerEventConsumption,
 } from "@/platform/events";
-import { platformEventOutbox } from "@/platform/events/schema";
-
 let connection: DatabaseConnection;
+let observerClient: Client;
 
 beforeAll(() => {
   connection = createDatabaseConnection(readDatabaseConfig(process.env));
+  observerClient = new Client({
+    connectionString: process.env.MIGRATION_DATABASE_URL,
+  });
+  return observerClient.connect();
 });
 
 afterAll(async () => {
   await connection.close();
+  await observerClient.end();
 });
 
 it("rolls back an enqueued event when its transaction fails", async () => {
@@ -39,12 +43,12 @@ it("rolls back an enqueued event when its transaction fails", async () => {
     }),
   ).rejects.toThrow("force rollback");
 
-  const rows = await connection.db
-    .select({ id: platformEventOutbox.id })
-    .from(platformEventOutbox)
-    .where(eq(platformEventOutbox.aggregateId, aggregateId));
+  const rows = await observerClient.query(
+    "select id from platform_event_outbox where aggregate_id = $1",
+    [aggregateId],
+  );
 
-  expect(rows).toHaveLength(0);
+  expect(rows.rows).toHaveLength(0);
 });
 
 it("records a consumer only once for the same event", async () => {

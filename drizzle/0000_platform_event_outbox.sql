@@ -36,8 +36,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   REVOKE USAGE, SELECT ON SEQUENCES FROM learning_hub_app;
 --> statement-breakpoint
-GRANT INSERT ON TABLE platform_event_outbox TO learning_hub_app;
+GRANT INSERT (id, event_type, aggregate_type, aggregate_id, payload, occurred_at, available_at) ON TABLE platform_event_outbox TO learning_hub_app;
 --> statement-breakpoint
-GRANT INSERT ON TABLE platform_event_consumptions TO learning_hub_app;
+GRANT INSERT (consumer_name, event_id) ON TABLE platform_event_consumptions TO learning_hub_app;
 --> statement-breakpoint
 GRANT SELECT (event_id) ON TABLE platform_event_consumptions TO learning_hub_app;

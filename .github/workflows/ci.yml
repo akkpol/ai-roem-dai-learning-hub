@@ -39,6 +39,11 @@ jobs:
           NEON_ENDPOINT_ID: ${{ vars.NEON_SESSION_002_ENDPOINT_ID }}
           NEON_ENDPOINT_HOSTNAME: ${{ vars.NEON_SESSION_002_MIGRATION_ENDPOINT_HOSTNAME }}
           NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+          SESSION_002_APPROVED_NEON_BRANCH_ID: ${{ vars.NEON_SESSION_002_APPROVED_BRANCH_ID }}
+          SESSION_002_APPROVED_NEON_BRANCH_NAME: ${{ vars.NEON_SESSION_002_APPROVED_BRANCH_NAME }}
+          SESSION_002_APPROVED_NEON_ENDPOINT_ID: ${{ vars.NEON_SESSION_002_APPROVED_ENDPOINT_ID }}
+          SESSION_002_APPROVED_NEON_ENDPOINT_HOSTNAME: ${{ vars.NEON_SESSION_002_APPROVED_ENDPOINT_HOSTNAME }}
+          SESSION_002_APPROVED_NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_APPROVED_DATABASE_NAME }}
         shell: bash
         run: |
           test -n "$DATABASE_URL"
@@ -52,6 +57,11 @@ jobs:
           test -n "$NEON_ENDPOINT_ID"
           test -n "$NEON_ENDPOINT_HOSTNAME"
           test -n "$NEON_DATABASE_NAME"
+          test -n "$SESSION_002_APPROVED_NEON_BRANCH_ID"
+          test -n "$SESSION_002_APPROVED_NEON_BRANCH_NAME"
+          test -n "$SESSION_002_APPROVED_NEON_ENDPOINT_ID"
+          test -n "$SESSION_002_APPROVED_NEON_ENDPOINT_HOSTNAME"
+          test -n "$SESSION_002_APPROVED_NEON_DATABASE_NAME"
           readonly expected_database="learning_hub_session_002_test"
           test "$REMOTE_TEST_DATABASE_RESET_ACK" = "$expected_database"
           test "$DATABASE_URL" != "$MIGRATION_DATABASE_URL"
@@ -65,6 +75,7 @@ jobs:
             }
           }
           EOF
+          npx tsx scripts/database/provider-preflight.ts
           npm run db:migrate
           npm run test:integration
       - name: Production HTTP smoke test

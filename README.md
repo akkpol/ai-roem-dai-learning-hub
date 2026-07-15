@@ -7,6 +7,8 @@ Learning Hub คือแพลตฟอร์ม Marketplace การเรี
 ## Source of truth
 
 - [Product and system design](docs/product/PRODUCT_AND_SYSTEM_DESIGN.md)
+- [Master roadmap](docs/project/MASTER_ROADMAP.md)
+- [Legacy inventory](docs/project/LEGACY_INVENTORY.md)
 
 ห้ามเริ่มฟีเจอร์ใหม่จากข้อความในโค้ด ข้อมูล demo หรือ commit เก่า หากข้อกำหนดไม่อยู่ในเอกสารต้นทาง ให้แก้และอนุมัติเอกสารก่อนพัฒนา
 
@@ -16,3 +18,7 @@ Learning Hub คือแพลตฟอร์ม Marketplace การเรี
 - Architecture direction: approved
 - Legacy data migration: not required
 - Implementation: paused until subsystem plans are written and reviewed
+
+## AI delivery control
+
+Technical Lead เป็นผู้กำหนด work package, ตรวจ evidence, อัปเดต roadmap และออก Prompt Packet ให้ Coding Session ทีละงาน Coding Session ไม่มีสิทธิ์ขยาย scope หรือประกาศงานว่า verified เอง

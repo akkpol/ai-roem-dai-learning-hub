@@ -1,6 +1,6 @@
 # Learning Hub Product and System Design
 
-**Status:** Approved technical direction; written specification awaiting owner review
+**Status:** Approved
 
 **Date:** 2026-07-15
 

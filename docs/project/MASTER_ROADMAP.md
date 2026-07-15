@@ -2,9 +2,9 @@
 
 **Last updated:** 2026-07-15
 
-**Current stage:** Architecture foundation verified
+**Current stage:** WP-01 design
 
-**Active work package:** None; WP-01 design is next
+**Active work package:** WP-01 Platform Foundation and Identity
 
 ## Status model
 
@@ -33,7 +33,7 @@ Coding Session ไม่มีสิทธิ์เปลี่ยนงาน�
 | ID | Work package | Depends on | Status | Exit gate |
 |---|---|---|---|---|
 | WP-00 | Repository Reset and Architecture Foundation | Product/System Design | `verified` | ไม่มี legacy runtime, build/test/architecture/CI ผ่าน |
-| WP-01 | Platform Foundation and Identity | WP-00 | `not_started` | Authentication, profile, session, authorization และ readiness ผ่าน E2E |
+| WP-01 | Platform Foundation and Identity | WP-00 | `designing` | Authentication, profile, session, authorization และ readiness ผ่าน E2E |
 | WP-02 | Organizations and Instructor Verification | WP-01 | `not_started` | Organization membership และ instructor review workflow ผ่าน E2E |
 | WP-03 | Taxonomy, Catalog Authoring and Moderation | WP-02 | `not_started` | ผู้สอนสร้าง version และ reviewer publish ได้โดยไม่ข้ามสิทธิ์ |
 | WP-04 | Public Discovery and Offering Publication | WP-03 | `not_started` | ผู้ใช้ค้นหา กรอง และดู offering ที่ publish แล้วได้ |

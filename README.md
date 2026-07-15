@@ -7,6 +7,7 @@ Learning Hub คือแพลตฟอร์ม Marketplace การเรี
 ## Source of truth
 
 - [Product and system design](docs/product/PRODUCT_AND_SYSTEM_DESIGN.md)
+- [Project status — สถานะปัจจุบันแบบสั้น](docs/project/PROJECT_STATUS.md)
 - [Master roadmap](docs/project/MASTER_ROADMAP.md)
 - [Legacy inventory](docs/project/LEGACY_INVENTORY.md)
 

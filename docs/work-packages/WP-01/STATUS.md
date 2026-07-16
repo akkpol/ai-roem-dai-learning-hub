@@ -6,7 +6,7 @@
 
 **Work package state:** `in_progress`
 
-**Current checkpoint:** SESSION-003 compatibility decision D-013 returned
+**Current checkpoint:** SESSION-003 independent review active
 
 **SESSION-002 verdict:** `PASS`
 
@@ -53,10 +53,15 @@ when the user requests another one. D-013 keeps the approved single-active-token
 contract and permits only a narrowly scoped, serialized deletion of that
 account's prior reset-verification rows inside the same outer transaction.
 
+The implementation leaf is complete at `ca4d33f5e34d70a0b30b88b838d07e7c0e859838`
+with handoff `ea2945b482fd07071df76be5d99f501743429a1b`. Its
+worktree is clean. These are submitted claims, not an acceptance verdict;
+SESSION-003 independent review is active in task
+`019f6b5f-8dd4-79c3-90b4-2f69c00bbda9` against that exact head.
+
 ## Next control action
 
-SESSION-003 may resume only with the D-013 compatibility tests for sequential,
-concurrent, rollback, namespace-isolation, generic-response, and rate-limit
-behavior. Production implementation may begin only after those tests pass.
-SESSION-003 remains prohibited from push, PR, merge, production/default Neon
-mutation, opening SESSION-004, or marking WP-01 verified.
+Wait for the independent review's exact `PASS` or `CHANGES_REQUIRED` verdict.
+Do not push, open a PR, merge, mutate production/default Neon, open SESSION-004,
+or mark WP-01 verified before the Senior reviews that artifact and its fresh
+gate evidence.

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { TrustedProxyBoundary } from "@/platform/security/client-ip";
+
 const identityEnvironment = z.object({
   AUTH_SECRET: z.string().min(32),
   AUTH_BASE_URL: z.string().url(),
@@ -20,6 +22,7 @@ export type IdentityConfig = {
   privacyVersion: string;
   emailFrom: string;
   resendApiKey?: string;
+  trustedProxy: TrustedProxyBoundary;
 };
 
 export function readIdentityConfig(
@@ -48,6 +51,7 @@ export function readIdentityConfig(
     privacyVersion: value.AUTH_PRIVACY_VERSION,
     emailFrom: value.AUTH_EMAIL_FROM,
     resendApiKey: value.RESEND_API_KEY,
+    trustedProxy: input.VERCEL === "1" ? "vercel" : "none",
   };
 }
 export function normalizeEmail(email: string): string {

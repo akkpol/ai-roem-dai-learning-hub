@@ -11,6 +11,7 @@ const config = {
   termsVersion: "terms-v1",
   privacyVersion: "privacy-v1",
   emailFrom: "Learning Hub <auth@learn.example.test>",
+  trustedProxy: "none" as const,
 };
 
 function fakeService() {
@@ -39,15 +40,35 @@ function fakeService() {
 }
 
 describe("Authentication HTTP boundary", () => {
-  it("ignores spoofable forwarded chains and accepts a trusted single-hop IP", () => {
+  it("ignores caller-provided IP headers outside the Vercel boundary", () => {
     expect(
       resolveClientIp(
         new Headers({
           "x-forwarded-for": "198.51.100.1, 203.0.113.2",
           "x-real-ip": "192.0.2.10",
+          "x-vercel-forwarded-for": "203.0.113.9",
         }),
+        "none",
       ),
-    ).toBe("192.0.2.10");
+    ).toBe("untrusted-proxy");
+  });
+
+  it("uses only Vercel's overwritten single-client header at the trusted boundary", () => {
+    expect(
+      resolveClientIp(
+        new Headers({
+          "x-real-ip": "192.0.2.10",
+          "x-vercel-forwarded-for": "203.0.113.9",
+        }),
+        "vercel",
+      ),
+    ).toBe("203.0.113.9");
+    expect(
+      resolveClientIp(
+        new Headers({ "x-vercel-forwarded-for": "203.0.113.9, 192.0.2.1" }),
+        "vercel",
+      ),
+    ).toBe("untrusted-proxy");
   });
 
   it("rate limits forgot-password before calling the orchestrator", async () => {
@@ -60,7 +81,11 @@ describe("Authentication HTTP boundary", () => {
     const response = await handlers.forgotPassword(
       new Request("https://learning.example.test/api/auth/forgot-password", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-real-ip": "192.0.2.1" },
+        headers: {
+          "content-type": "application/json",
+          origin: "https://learning.example.test",
+          "x-real-ip": "192.0.2.1",
+        },
         body: JSON.stringify({ email: "unknown@example.test" }),
       }),
     );
@@ -79,7 +104,10 @@ describe("Authentication HTTP boundary", () => {
     const response = await handlers.signIn(
       new Request("https://learning.example.test/api/auth/sign-in", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          origin: "https://learning.example.test",
+        },
         body: JSON.stringify({
           email: "user@example.test",
           password: "not-returned-to-client",
@@ -117,6 +145,32 @@ describe("Authentication HTTP boundary", () => {
     expect(rejected.status).toBe(400);
   });
 
+  it("anchors verification redirects to AUTH_BASE_URL and rejects a hostile request host", async () => {
+    const service = fakeService();
+    const handlers = createAuthHttpHandlers({
+      service,
+      config,
+      consumeRateLimit: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
+    });
+    const response = await handlers.verifyEmail(
+      new Request(
+        "https://evil.example/api/auth/verify-email?token=safe&callbackURL=%2Fverify-email",
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    expect(service.verifyEmail).not.toHaveBeenCalled();
+
+    const hostileHost = await handlers.verifyEmail(
+      new Request(
+        "https://learning.example.test/api/auth/verify-email?token=safe&callbackURL=%2Fverify-email",
+        { headers: { host: "evil.example" } },
+      ),
+    );
+    expect(hostileHost.status).toBe(403);
+    expect(service.verifyEmail).not.toHaveBeenCalled();
+  });
+
   it("rejects a foreign Origin before authentication", async () => {
     const service = fakeService();
     const handlers = createAuthHttpHandlers({
@@ -140,5 +194,146 @@ describe("Authentication HTTP boundary", () => {
     );
     expect(response.status).toBe(403);
     expect(service.signIn).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing Origin unless Fetch Metadata proves same-origin", async () => {
+    const service = fakeService();
+    const handlers = createAuthHttpHandlers({
+      service,
+      config,
+      consumeRateLimit: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
+    });
+    const body = JSON.stringify({
+      email: "user@example.test",
+      password: "not-returned-to-client",
+      callbackPath: "/",
+    });
+    const missing = await handlers.signIn(
+      new Request("https://learning.example.test/api/auth/sign-in", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body,
+      }),
+    );
+    const sameOriginMetadata = await handlers.signIn(
+      new Request("https://learning.example.test/api/auth/sign-in", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "sec-fetch-site": "same-origin",
+        },
+        body,
+      }),
+    );
+
+    expect(missing.status).toBe(403);
+    expect(sameOriginMetadata.status).toBe(200);
+    expect(service.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses an unrotatable fallback key and exactly 3 requests per 60 seconds for signup", async () => {
+    const service = fakeService();
+    const consumeRateLimit = vi.fn(async () => ({ allowed: true, retryAfter: 0 }));
+    const handlers = createAuthHttpHandlers({ service, config, consumeRateLimit });
+    const request = (spoofedIp: string) =>
+      handlers.signUp(
+        new Request("https://learning.example.test/api/auth/sign-up", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://learning.example.test",
+            "x-real-ip": spoofedIp,
+          },
+          body: JSON.stringify({
+            displayName: "Learner",
+            email: "learner@example.test",
+            password: "correct-horse-battery-staple",
+            ageAttested: true,
+            termsVersion: "terms-v1",
+            privacyVersion: "privacy-v1",
+            callbackPath: "/verify-email",
+          }),
+        }),
+      );
+
+    await request("192.0.2.1");
+    await request("192.0.2.2");
+
+    expect(consumeRateLimit).toHaveBeenNthCalledWith(1, {
+      endpoint: "sign-up",
+      clientIp: "untrusted-proxy",
+      windowSeconds: 60,
+      max: 3,
+    });
+    expect(consumeRateLimit).toHaveBeenNthCalledWith(2, {
+      endpoint: "sign-up",
+      clientIp: "untrusted-proxy",
+      windowSeconds: 60,
+      max: 3,
+    });
+  });
+
+  it("does not misclassify an unrelated signup operational failure as invalid input", async () => {
+    const service = fakeService();
+    service.signUp.mockRejectedValueOnce(new Error("database unavailable"));
+    const handlers = createAuthHttpHandlers({
+      service,
+      config,
+      consumeRateLimit: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
+    });
+    const response = await handlers.signUp(
+      new Request("https://learning.example.test/api/auth/sign-up", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://learning.example.test",
+        },
+        body: JSON.stringify({
+          displayName: "Learner",
+          email: "learner@example.test",
+          password: "correct-horse-battery-staple",
+          ageAttested: true,
+          termsVersion: "terms-v1",
+          privacyVersion: "privacy-v1",
+          callbackPath: "/verify-email",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain("database unavailable");
+  });
+
+  it("does not pass the raw trusted client IP into Identity persistence", async () => {
+    const service = fakeService();
+    const handlers = createAuthHttpHandlers({
+      service,
+      config: { ...config, trustedProxy: "vercel" },
+      consumeRateLimit: vi.fn(async () => ({ allowed: true, retryAfter: 0 })),
+    });
+    await handlers.signUp(
+      new Request("https://learning.example.test/api/auth/sign-up", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          origin: "https://learning.example.test",
+          "x-vercel-forwarded-for": "203.0.113.44",
+        },
+        body: JSON.stringify({
+          displayName: "Learner",
+          email: "learner@example.test",
+          password: "correct-horse-battery-staple",
+          ageAttested: true,
+          termsVersion: "terms-v1",
+          privacyVersion: "privacy-v1",
+          callbackPath: "/verify-email",
+        }),
+      }),
+    );
+
+    expect(service.signUp).toHaveBeenCalledWith(
+      expect.any(Object),
+      { userAgent: undefined },
+    );
   });
 });

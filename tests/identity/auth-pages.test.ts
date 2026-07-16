@@ -15,7 +15,6 @@ describe("Public authentication pages", () => {
     [SignUpPage, "สร้างบัญชี"],
     [SignInPage, "เข้าสู่ระบบ"],
     [ForgotPasswordPage, "ลืมรหัสผ่าน"],
-    [ResetPasswordPage, "ตั้งรหัสผ่านใหม่"],
     [VerifyEmailPage, "ยืนยันอีเมล"],
   ])("renders an accessible Thai page", (Page, heading) => {
     expect(render(Page)).toContain(heading);
@@ -29,5 +28,28 @@ describe("Public authentication pages", () => {
     expect(signup).toContain("ข้อกำหนดการใช้งาน");
     expect(signup).not.toContain("TOTP");
     expect(signup).not.toContain("อุปกรณ์ที่เข้าสู่ระบบ");
+  });
+
+  it("initializes reset from the emailed query token without a manual token field", async () => {
+    const reset = renderToStaticMarkup(
+      await ResetPasswordPage({
+        searchParams: Promise.resolve({ token: "email-link-token" }),
+      }),
+    );
+
+    expect(reset).toContain("ตั้งรหัสผ่านใหม่");
+    expect(reset).toContain('name="token"');
+    expect(reset).toContain('type="hidden"');
+    expect(reset).toContain('value="email-link-token"');
+    expect(reset).not.toContain("รหัสยืนยัน");
+  });
+
+  it("fails closed when the reset link has no token", async () => {
+    const reset = renderToStaticMarkup(
+      await ResetPasswordPage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(reset).toContain("ลิงก์ตั้งรหัสผ่านไม่ถูกต้อง");
+    expect(reset).not.toContain("<form");
   });
 });

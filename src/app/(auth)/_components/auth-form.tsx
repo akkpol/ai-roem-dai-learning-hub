@@ -15,10 +15,12 @@ export function AuthForm({
   kind,
   termsVersion,
   privacyVersion,
+  resetToken,
 }: {
   kind: Kind;
   termsVersion?: string;
   privacyVersion?: string;
+  resetToken?: string;
 }) {
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -86,10 +88,7 @@ export function AuthForm({
         <input name="redirectPath" type="hidden" value="/reset-password" />
       )}
       {kind === "reset-password" && (
-        <label>
-          รหัสยืนยัน
-          <input name="token" autoComplete="one-time-code" required />
-        </label>
+        <input name="token" type="hidden" value={resetToken} />
       )}
       <button disabled={submitting} type="submit">
         {submitting ? "กำลังดำเนินการ…" : "ดำเนินการต่อ"}

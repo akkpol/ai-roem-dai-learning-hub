@@ -455,3 +455,46 @@ Plan saved at
 Execute inline in this existing SESSION-003 task with
 `superpowers:executing-plans`; do not dispatch a second task or implementation
 agent.
+
+## SESSION-003-FIX-01 execution trace
+
+Scope is limited to the five findings in the SESSION-003 independent review.
+The spike harness remains historical evidence; release proof now targets the
+generated migration and production Identity service, HTTP handlers, schema,
+and explicit route exports.
+
+- [x] Signup enumeration RED: `tests/identity/identity-service.test.ts` failed
+  2/3 because known accounts reached Better Auth and a concurrent `23505`
+  escaped. A second RED proved Better Auth's wrapped `FAILED_TO_CREATE_USER`
+  race was not normalized. GREEN: 6/6 service tests pass; known accounts
+  short-circuit, account-email unique conflicts and confirmed concurrent
+  duplicates return the generic result, and unrelated failures remain errors.
+- [x] Proxy/rate/origin RED: `tests/identity/auth-http.test.ts` failed 5/9 for
+  spoofable IP rotation, wrong 10-second signup window, hostile request origin,
+  and missing-Origin acceptance. Separate REDs caught operational signup errors
+  misclassified as input and raw trusted IP passed toward persistence. GREEN:
+  11/11 pass with Vercel's overwritten forwarded-IP boundary, stable
+  fail-closed fallback, exact 3/60 signup rule, Origin/Host plus Fetch Metadata
+  enforcement, trusted-origin redirects, generic 500 operational failure, and
+  no raw IP persistence path. Deployment contract:
+  https://vercel.com/docs/headers/request-headers.
+- [x] Reset page RED: `tests/identity/auth-pages.test.ts` failed 2/7 because the
+  emailed query token was ignored and the missing-token page rendered a manual
+  field. GREEN: 7/7 pass with server-side query parsing, a hidden initialized
+  token, and fail-closed missing-token rendering.
+- [x] D-011/D-013 proof RED: the proof-topology test failed 2/2 because the
+  compatibility suite imported `createSession003Spike`. GREEN: 2/2 pass after
+  replacing it with production orchestration coverage for generated migration,
+  signup rollback, sequential/concurrent reset, rollback after invalidation and
+  outbox, namespace/account isolation, unknown-email equivalence, real route
+  exports, production rate limit, and email-link reset acceptance.
+- [x] Focused Identity tests: 11 files / 44 tests passed.
+- [x] Full unit tests: 24 files / 174 tests passed.
+- [x] Architecture, lint, typecheck, build, and high-threshold production audit
+  passed. Audit still reports 6 moderate advisories.
+- [ ] PostgreSQL production proof: BLOCKED before connection because
+  `SESSION_003_SPIKE_DATABASE_URL` is absent; 10 tests skipped.
+- [ ] Identity acceptance: BLOCKED before connection because `DATABASE_URL` is
+  absent; provider mutation was not attempted.
+- [ ] Broad integration: BLOCKED by the destructive-reset preflight with no
+  authorized provider credentials.

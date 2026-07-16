@@ -18,88 +18,152 @@ import {
 } from "./schema";
 
 export type IdentityRequestContext = {
-  ipAddress?: string;
   userAgent?: string;
 };
 
 export type GenericAuthResult = { status: true; message: string };
+
+export type IdentityServiceTestHooks = {
+  afterSignupWrites?(): Promise<void>;
+  afterResetAccountLocked?(): Promise<void>;
+  afterResetInvalidation?(): Promise<void>;
+  afterResetOutbox?(): Promise<void>;
+};
 
 const genericResult = (): GenericAuthResult => ({
   status: true,
   message: genericAuthMessage,
 });
 
-export function createIdentityService(database: AppDatabase, config: IdentityConfig) {
+function isAccountEmailUniqueConflict(error: unknown): boolean {
+  let current = error;
+  const visited = new Set<unknown>();
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const candidate = current as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+    if (
+      candidate.code === "23505" &&
+      candidate.constraint === "identity_accounts_email_unique"
+    ) {
+      return true;
+    }
+    current = candidate.cause;
+  }
+  return false;
+}
+
+function isCreateUserFailure(error: unknown): boolean {
+  let current = error;
+  const visited = new Set<unknown>();
+  while (current && typeof current === "object" && !visited.has(current)) {
+    visited.add(current);
+    const candidate = current as {
+      body?: { code?: unknown };
+      cause?: unknown;
+    };
+    if (candidate.body?.code === "FAILED_TO_CREATE_USER") return true;
+    current = candidate.cause;
+  }
+  return false;
+}
+
+export function createIdentityService(
+  database: AppDatabase,
+  config: IdentityConfig,
+  testHooks?: IdentityServiceTestHooks,
+) {
+  if (testHooks && process.env.NODE_ENV !== "test") {
+    throw new Error("identity test hooks are unavailable");
+  }
   return {
     signUp: async (
       command: SignUpCommand,
       request: IdentityRequestContext = {},
     ): Promise<GenericAuthResult> => {
-      await database.transaction(async (transaction) => {
-        const existing = await transaction
-          .select({ id: identityAccounts.id })
-          .from(identityAccounts)
-          .where(eq(identityAccounts.email, command.email));
-        const auth = createTransactionAuth(transaction, config, {
-          sendVerificationEmail: async ({ user, token }) => {
-            const origin = new URL(config.baseUrl).origin;
-            const actionUrl = new URL("/api/auth/verify-email", origin);
-            actionUrl.searchParams.set("token", token);
-            actionUrl.searchParams.set("callbackURL", "/verify-email?verified=1");
-            await enqueueAuthEmail(
-              transaction,
-              config,
-              user.id,
-              {
-                template: "verify_email",
-                email: user.email,
-                token,
-                url: actionUrl.href,
-              },
-              new Date(Date.now() + 60 * 60 * 1_000),
-            );
-          },
-          sendResetPassword: async () => undefined,
-        });
-        const result = await auth.api.signUpEmail({
-          body: {
-            name: command.displayName,
-            email: command.email,
-            password: command.password,
-            ageAttestedAt: command.ageAttestedAt,
-            callbackURL: command.callbackPath,
-          },
-        });
-        if (existing.length > 0) return;
-        await transaction.insert(identityProfiles).values({
-          accountId: result.user.id,
-          displayName: command.displayName,
-        });
-        await transaction.insert(identityPolicyAcceptances).values([
-          {
+      try {
+        await database.transaction(async (transaction) => {
+          const existing = await transaction
+            .select({ id: identityAccounts.id })
+            .from(identityAccounts)
+            .where(eq(identityAccounts.email, command.email));
+          if (existing.length > 0) return;
+          const auth = createTransactionAuth(transaction, config, {
+            sendVerificationEmail: async ({ user, token }) => {
+              const origin = new URL(config.baseUrl).origin;
+              const actionUrl = new URL("/api/auth/verify-email", origin);
+              actionUrl.searchParams.set("token", token);
+              actionUrl.searchParams.set("callbackURL", "/verify-email?verified=1");
+              await enqueueAuthEmail(
+                transaction,
+                config,
+                user.id,
+                {
+                  template: "verify_email",
+                  email: user.email,
+                  token,
+                  url: actionUrl.href,
+                },
+                new Date(Date.now() + 60 * 60 * 1_000),
+              );
+            },
+            sendResetPassword: async () => undefined,
+          });
+          const result = await auth.api.signUpEmail({
+            body: {
+              name: command.displayName,
+              email: command.email,
+              password: command.password,
+              ageAttestedAt: command.ageAttestedAt,
+              callbackURL: command.callbackPath,
+            },
+          });
+          await transaction.insert(identityProfiles).values({
             accountId: result.user.id,
-            policyType: "terms",
-            policyVersion: command.termsVersion,
-            acceptedAt: command.ageAttestedAt,
-            ipAddress: request.ipAddress,
-            userAgent: request.userAgent,
-          },
-          {
+            displayName: command.displayName,
+          });
+          await transaction.insert(identityPolicyAcceptances).values([
+            {
+              accountId: result.user.id,
+              policyType: "terms",
+              policyVersion: command.termsVersion,
+              acceptedAt: command.ageAttestedAt,
+              userAgent: request.userAgent,
+            },
+            {
+              accountId: result.user.id,
+              policyType: "privacy",
+              policyVersion: command.privacyVersion,
+              acceptedAt: command.ageAttestedAt,
+              userAgent: request.userAgent,
+            },
+          ]);
+          await transaction.insert(identityAuditEvents).values({
             accountId: result.user.id,
-            policyType: "privacy",
-            policyVersion: command.privacyVersion,
-            acceptedAt: command.ageAttestedAt,
-            ipAddress: request.ipAddress,
-            userAgent: request.userAgent,
-          },
-        ]);
-        await transaction.insert(identityAuditEvents).values({
-          accountId: result.user.id,
-          action: "identity.signup_requested.v1",
-          payload: { source: "email_password" },
-          occurredAt: command.ageAttestedAt,
+            action: "identity.signup_requested.v1",
+            payload: { source: "email_password" },
+            occurredAt: command.ageAttestedAt,
+          });
+          await testHooks?.afterSignupWrites?.();
         });
-      });
+      } catch (error) {
+        if (isAccountEmailUniqueConflict(error)) return genericResult();
+        if (isCreateUserFailure(error)) {
+          try {
+            const concurrent = await database
+              .select({ id: identityAccounts.id })
+              .from(identityAccounts)
+              .where(eq(identityAccounts.email, command.email));
+            if (concurrent.length > 0) return genericResult();
+          } catch {
+            // Preserve the original Better Auth operational failure.
+          }
+        }
+        throw error;
+      }
       return genericResult();
     },
 
@@ -186,6 +250,7 @@ export function createIdentityService(database: AppDatabase, config: IdentityCon
           .for("update");
         const account = rows[0];
         if (account) {
+          await testHooks?.afterResetAccountLocked?.();
           await transaction
             .delete(identityVerifications)
             .where(
@@ -194,6 +259,7 @@ export function createIdentityService(database: AppDatabase, config: IdentityCon
                 like(identityVerifications.identifier, "reset-password:%"),
               ),
             );
+          await testHooks?.afterResetInvalidation?.();
         }
         const auth = createTransactionAuth(transaction, config, {
           sendVerificationEmail: async () => undefined,
@@ -221,12 +287,13 @@ export function createIdentityService(database: AppDatabase, config: IdentityCon
           body: { email: command.email, redirectTo: command.redirectPath },
         });
         if (account) {
+          await testHooks?.afterResetOutbox?.();
           await transaction.insert(identityAuditEvents).values({
             accountId: account.id,
             action: "identity.password_reset_requested.v1",
             payload: {
               source: "email_password",
-              requestContext: request.ipAddress ? "network_present" : "network_absent",
+              requestContext: request.userAgent ? "user_agent_present" : "user_agent_absent",
             },
             occurredAt: new Date(),
           });

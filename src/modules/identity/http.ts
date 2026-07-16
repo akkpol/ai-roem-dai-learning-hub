@@ -38,23 +38,35 @@ async function readJson(request: Request): Promise<unknown> {
   return request.json();
 }
 
-function contextFrom(request: Request) {
-  return {
-    ipAddress: resolveClientIp(request.headers),
-    userAgent: request.headers.get("user-agent") ?? undefined,
-  };
-}
-
 export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
   const trustedOrigin = new URL(dependencies.config.baseUrl).origin;
-  const rejectForeignOrigin = (request: Request): Response | undefined => {
-    const origin = request.headers.get("origin");
-    if (!origin || origin === trustedOrigin) return;
-    return Response.json(
+  const trustedHost = new URL(dependencies.config.baseUrl).host;
+  const forbidden = () =>
+    Response.json(
       { status: false, message: genericAuthMessage },
       { status: 403 },
     );
+  const rejectUntrustedTarget = (request: Request): Response | undefined => {
+    const requestUrl = new URL(request.url);
+    const host = request.headers.get("host");
+    if (
+      requestUrl.origin !== trustedOrigin ||
+      (host !== null && host.toLowerCase() !== trustedHost.toLowerCase())
+    ) {
+      return forbidden();
+    }
   };
+  const rejectUnsafeBrowserRequest = (request: Request): Response | undefined => {
+    const untrustedTarget = rejectUntrustedTarget(request);
+    if (untrustedTarget) return untrustedTarget;
+    const origin = request.headers.get("origin");
+    if (origin === trustedOrigin) return;
+    if (!origin && request.headers.get("sec-fetch-site") === "same-origin") return;
+    return forbidden();
+  };
+  const requestContext = (request: Request) => ({
+    userAgent: request.headers.get("user-agent") ?? undefined,
+  });
   const limited = async (
     request: Request,
     endpoint: string,
@@ -62,7 +74,10 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
   ): Promise<Response | undefined> => {
     const decision = await dependencies.consumeRateLimit({
       endpoint,
-      clientIp: resolveClientIp(request.headers),
+      clientIp: resolveClientIp(
+        request.headers,
+        dependencies.config.trustedProxy,
+      ),
       windowSeconds,
       max: 3,
     });
@@ -75,21 +90,33 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
 
   return {
     signUp: async (request: Request): Promise<Response> => {
-      const foreign = rejectForeignOrigin(request);
+      const foreign = rejectUnsafeBrowserRequest(request);
       if (foreign) return foreign;
-      const rejected = await limited(request, "sign-up", 10);
+      const rejected = await limited(request, "sign-up", 60);
       if (rejected) return rejected;
+      let command;
       try {
-        const command = parseSignUpCommand(await readJson(request), {
+        command = parseSignUpCommand(await readJson(request), {
           termsVersion: dependencies.config.termsVersion,
           privacyVersion: dependencies.config.privacyVersion,
         });
-        return Response.json(await dependencies.service.signUp(command, contextFrom(request)));
       } catch {
         return invalidInput();
       }
+      try {
+        return Response.json(
+          await dependencies.service.signUp(command, requestContext(request)),
+        );
+      } catch {
+        return Response.json(
+          { status: false, message: genericAuthMessage },
+          { status: 500 },
+        );
+      }
     },
     verifyEmail: async (request: Request): Promise<Response> => {
+      const untrustedTarget = rejectUntrustedTarget(request);
+      if (untrustedTarget) return untrustedTarget;
       const requestUrl = new URL(request.url);
       const token = requestUrl.searchParams.get("token");
       if (!token) return invalidInput();
@@ -98,7 +125,7 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
         const callback = requestUrl.searchParams.get("callbackURL");
         if (callback) {
           const path = assertRelativeCallbackPath(callback);
-          return Response.redirect(new URL(path, requestUrl.origin), 302);
+          return Response.redirect(new URL(path, trustedOrigin), 302);
         }
         return Response.json(result);
       } catch {
@@ -106,7 +133,7 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
       }
     },
     signIn: async (request: Request): Promise<Response> => {
-      const foreign = rejectForeignOrigin(request);
+      const foreign = rejectUnsafeBrowserRequest(request);
       if (foreign) return foreign;
       const rejected = await limited(request, "sign-in", 10);
       if (rejected) return rejected;
@@ -121,21 +148,21 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
       }
     },
     forgotPassword: async (request: Request): Promise<Response> => {
-      const foreign = rejectForeignOrigin(request);
+      const foreign = rejectUnsafeBrowserRequest(request);
       if (foreign) return foreign;
       const rejected = await limited(request, "forgot-password", 60);
       if (rejected) return rejected;
       try {
         const command = parseResetRequestCommand(await readJson(request));
         return Response.json(
-          await dependencies.service.requestPasswordReset(command, contextFrom(request)),
+          await dependencies.service.requestPasswordReset(command, requestContext(request)),
         );
       } catch {
         return invalidInput();
       }
     },
     resetPassword: async (request: Request): Promise<Response> => {
-      const foreign = rejectForeignOrigin(request);
+      const foreign = rejectUnsafeBrowserRequest(request);
       if (foreign) return foreign;
       try {
         const result = await dependencies.service.resetPassword(
@@ -147,7 +174,7 @@ export function createAuthHttpHandlers(dependencies: HandlerDependencies) {
       }
     },
     signOut: async (request: Request): Promise<Response> => {
-      const foreign = rejectForeignOrigin(request);
+      const foreign = rejectUnsafeBrowserRequest(request);
       if (foreign) return foreign;
       try {
         const result = await dependencies.service.signOut(request.headers);

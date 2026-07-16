@@ -22,6 +22,10 @@ describe("Identity configuration", () => {
     expect(config.authSecret).toHaveLength(32);
     expect(config.emailEncryptionKey).toHaveLength(32);
     expect(config.termsVersion).toBe("terms-2026-07");
+    expect(config.trustedProxy).toBe("none");
+    expect(readIdentityConfig({ ...valid, VERCEL: "1" }).trustedProxy).toBe(
+      "vercel",
+    );
   });
 
   it("rejects weak secret and malformed encryption keys without echoing them", () => {

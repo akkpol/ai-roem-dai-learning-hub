@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-16
 
-**Current stage:** SESSION-002 remediation control — WP-01 Senior bootstrap
+**Current stage:** SESSION-002 accepted and merged — SESSION-003 remains closed
 
 **Active work package:** WP-01 Platform Foundation and Identity
 
@@ -47,6 +47,12 @@ Leaf Session ใช้ verdict `PASS`, `CHANGES_REQUIRED` หรือ `BLOCKED`
 | WP-10 | Trust, Safety, Finance Operations and Analytics | WP-05, WP-08, WP-09 | `not_started` | Moderation, dispute, payout operations และ audited reporting พร้อมใช้ |
 | WP-11 | Production Launch Readiness | WP-01—WP-10 | `not_started` | Security, performance, accessibility, backup/restore และ launch runbook ผ่าน |
 
+## Session checkpoints
+
+| Session | Work package | Status | Checkpoint |
+|---|---|---|---|
+| SESSION-002 | WP-01 | `verified` | PostgreSQL foundation accepted after independent remediation reviews, Neon integration, GitHub CI, Vercel Preview, merge, and disposable-resource cleanup. WP-01 remains `in_progress`. |
+
 ## Project-wide gates
 
 ทุก work package ต้องผ่าน:
@@ -72,10 +78,12 @@ Leaf Session ใช้ verdict `PASS`, `CHANGES_REQUIRED` หรือ `BLOCKED`
 - WP-00 implementation accepted at `cbdf0fa` after independent Lead review
 - Clean install, architecture, lint, typecheck, 5 tests, production build และ local HTTP smoke ผ่านบน Node 24.18.0
 - Dependency audit ไม่มี high หรือ critical advisory; moderate advisory จาก PostCSS ที่ Next.js 16.2.10 ตรึงไว้ต้องติดตามเมื่อ Next.js ออกรุ่นแก้ไข
-- SESSION-002 local gates reported passing: architecture, lint, typecheck, 8 test files / 24 tests และ production build
-- SESSION-002 ยังมี `CHANGES_REQUIRED`: runtime role privilege กว้างเกินไป, destructive reset guard ไม่ผูก Neon endpoint และ remote PostgreSQL URL ไม่บังคับ TLS
-- ยังไม่มี accepted evidence สำหรับ remote branch, PR, GitHub Actions, Vercel Preview หรือ Neon provider acceptance
+- SESSION-002 final local gates passed: architecture, lint, typecheck, 12 test files / 129 tests, production build และ high-threshold dependency audit
+- GitHub Actions run `29480176412` passed, including Neon migration and 3 integration files / 8 tests on a disposable non-default, non-protected branch
+- Vercel Preview built successfully; liveness and database readiness returned HTTP 200 and runtime logs had no error/fatal entries
+- PR #8 merged to `main` as `e5446736`; the disposable Neon branch and all `NEON_SESSION_002_*` GitHub acceptance values were deleted
+- Production/default Neon branch and Vercel Production were not mutated
 
 ## Next control action
 
-เปิด WP-01 Senior Engineer จาก `docs/prompts/WP-01-SENIOR-ENGINEER-BOOTSTRAP.md` ให้สร้าง Fix Session Prompt และ evidence matrix ห้ามเปิด SESSION-003 หรือเลื่อน WP-01 เป็น `verified` จนกว่า fixes ผ่าน Independent Review และ provider gates ครบ
+Program Lead may authorize SESSION-003 as a separate isolated session. This checkpoint does not open it. WP-01 stays `in_progress` until the remaining identity/authentication sessions and the WP exit gate pass.

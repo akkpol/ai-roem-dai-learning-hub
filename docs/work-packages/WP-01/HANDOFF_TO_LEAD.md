@@ -1,40 +1,47 @@
 # WP-01 Handoff to Program Lead
 
-**Checkpoint:** SESSION-002 remediation control
+**Checkpoint:** SESSION-002 final acceptance
 
 **Date:** 2026-07-16
 
-**Senior verdict:** `CHANGES_REQUIRED`
+**Senior recommendation:** Accept SESSION-002 as `PASS`; keep WP-01
+`in_progress`
 
-## WP summary
+## Outcome
 
-SESSION-002 local implementation evidence is credible but insufficient for acceptance. The reviewed head `580e95d21c4456dfb94800dec33ca2e00fe0073c` has one confirmed Medium excessive-privilege finding, one provider-binding release blocker, and one remote-TLS production blocker. GitHub CI and Vercel Preview were not run; Neon integration was reported but live privilege inspection was not run.
+SESSION-002 PostgreSQL foundation is implemented, independently reviewed,
+provider-tested, merged, and cleaned up. The final delivery is PR #8, merged to
+`main` as `e5446736c0aacc0b1aa1b11d835a1ee188d2b0f6`.
 
-The Senior control checkpoint produced WP-01 status, session registry, decisions, and `docs/prompts/WP-01/SESSION-002-FIX-01.md` in an isolated branch from governance commit `4b93956a7804ce26159b34f5de3bc7c1552b9ef6`. No implementation, provider mutation, push, PR, merge, SESSION-003, or WP status promotion occurred.
+The result supplies a transactional outbox and deduplication foundation,
+least-privilege runtime database authority, separated migration credentials,
+provider-bound reset protection, enforced remote TLS, database readiness, and
+required CI integration coverage.
 
-## Evidence matrix
+## Final evidence
 
-| Gate | Observed evidence | Verdict | Owner / next evidence |
-|---|---|---|---|
-| Local architecture/lint/typecheck/unit/build | SESSION-002 handoff reports exit 0; unit 8 files / 24 tests | SUPPORTING ONLY | Fix implementer reruns; Independent Reviewer verifies |
-| Security | Scan confirms blanket current/future DML with high confidence; reset and TLS blockers reproduced in review | FAIL | Fix implementer resolves all three; Independent Reviewer rescans |
-| Neon | Migration/integration reported 3 files / 4 tests; live privilege inspection NOT RUN | NOT ACCEPTED | Approved operator proves provider identity, TLS, grants, schema, and cleanup on disposable branch |
-| GitHub CI | No remote branch, PR, run URL, or result | NOT RUN | Program Lead must explicitly authorize later remote execution |
-| Vercel Preview | No Preview deployment or runtime evidence | NOT RUN | Program Lead must explicitly authorize later PR Preview |
-| Independent Review | Fix does not exist and review is not opened | NOT RUN | Open only after Fix handoff in a separate worktree/session |
+- Local: architecture, lint, typecheck, 12 files / 129 unit tests, build, and
+  high-threshold audit passed.
+- Independent review: FIX-04 and FIX-05 both `PASS` with no findings.
+- Neon: disposable branch was verified non-default/non-protected; migrations,
+  3 integration files / 8 tests, and live catalog/privilege checks passed.
+- GitHub: final Actions run `29480176412` passed at exact PR head
+  `3739346a5991fac0da71b6c541a0144bf8d01ae5`.
+- Vercel Preview: READY build; liveness and database readiness HTTP 200; no
+  error/fatal runtime logs.
+- Cleanup: disposable Neon branch and all `NEON_SESSION_002_*` GitHub
+  acceptance values deleted after merge.
+- Isolation: Neon production/default branch and Vercel Production untouched.
 
-## Remaining risks
+## Residual items
 
-- Runtime compromise can currently modify/delete event tables and may inherit DML on future sensitive tables.
-- A wrong remote endpoint with the same database name can satisfy the current destructive reset guard.
-- Remote runtime/migration connections can be configured without enforced TLS.
-- GitHub, Vercel, and complete Neon acceptance remain unobserved.
-- The later sequence that creates the remote branch/PR required for GitHub CI and Vercel Preview needs explicit Program Lead authorization; this checkpoint grants none.
+- Moderate PostCSS advisories remain below the configured high-severity audit
+  threshold and require a separate dependency decision.
+- SESSION-003 and the later WP-01 slices remain unimplemented.
+- WP-01 is not yet eligible for `verified`, and WP-02 remains closed.
 
 ## Recommendation
 
-**Fix Prompt ready to open:** YES, after Program Lead explicitly assigns the leaf session and creates a fresh isolated worktree from exact SESSION-002 head.
-
-**Fix Session opened now:** NO.
-
-Authorize only `SESSION-002-FIX-01`. Require it to stop after local commits and handoff, then open a separate Independent Review Session. Do not open SESSION-003, push, create a PR, merge, advance WP-01, or open WP-02 from this checkpoint. WP-01 should proceed only into scoped remediation and remains `in_progress`, not verified.
+Record SESSION-002 as accepted. Program Lead may next authorize SESSION-003 in
+a new isolated worktree with its own implementation, review, provider, and
+delivery evidence. This handoff does not open SESSION-003.

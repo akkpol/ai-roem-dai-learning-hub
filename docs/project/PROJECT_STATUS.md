@@ -2,11 +2,11 @@
 
 **อัปเดตล่าสุด:** 2026-07-16
 
-**ตอนนี้อยู่ที่:** WP-01 กำลังดำเนินงาน — SESSION-002 implement แล้วแต่ต้องแก้ 3 security/release findings และยังไม่ผ่าน provider gates
+**ตอนนี้อยู่ที่:** WP-01 กำลังดำเนินงาน — ฐาน PostgreSQL ใน SESSION-002 ผ่านและ merge แล้ว
 
-**Session ที่กำลังเปิด:** WP-01 Senior Engineer bootstrap เพื่อสร้าง Fix Session Prompt; ยังไม่มี Fix Implementation Session ที่ได้รับอนุญาต
+**งานเขียนโค้ดที่เปิดอยู่:** ไม่มี — SESSION-003 ยังไม่ได้เปิด
 
-**เจ้าของงานปัจจุบัน:** WP-01 Senior Engineer รับผิดชอบ review evidence, session plan และ fix prompt; Program Lead ควบคุม dependency และ exit gate
+**เจ้าของงานถัดไป:** Program Lead ตัดสินใจเปิด SESSION-003 แยกต่างหาก; WP-01 Senior Engineer ยังคุม evidence และ exit gate
 
 **เอกสารที่อนุมัติแล้ว:** [WP-01 Platform Foundation and Identity Design](../superpowers/specs/2026-07-15-platform-foundation-and-identity-design.md)
 
@@ -15,7 +15,7 @@
 | ส่วน | สถานะ | ฟีเจอร์หลักแบบสั้น |
 |---|---|---|
 | WP-00 ฐานโครงการ | ✅ ผ่านแล้ว | ลบระบบเก่า, สร้างแอปเปล่า, health check, กฎ architecture และ CI |
-| WP-01 สมาชิกและสิทธิ์ | 🟠 กำลังแก้ก่อนรับรอง | สมัคร, เข้าสู่ระบบ, โปรไฟล์, session, บทบาทและสิทธิ์ |
+| WP-01 สมาชิกและสิทธิ์ | 🟠 กำลังดำเนินงาน | ฐาน PostgreSQL ผ่านแล้ว; สมัคร, เข้าสู่ระบบ, โปรไฟล์, session, บทบาทและสิทธิ์ยังเหลือ |
 | WP-02 ผู้สอนและองค์กร | ⚪ รอ | สมัครเป็นผู้สอน, ตรวจสอบผู้สอน, องค์กร, สมาชิกและทีมงาน |
 | WP-03 หลักสูตรและการอนุมัติ | ⚪ รอ | หมวดวิชา, สร้างหลักสูตร, version, ส่งตรวจและอนุมัติก่อนเผยแพร่ |
 | WP-04 การค้นหาและรูปแบบการเรียน | ⚪ รอ | ค้นหา, ตัวกรอง, หน้าหลักสูตร, ราคา, รอบเรียนและรูปแบบการสอน |
@@ -37,4 +37,4 @@
 
 ## งานถัดไป
 
-เปิด WP-01 Senior Engineer Session จาก `docs/prompts/WP-01-SENIOR-ENGINEER-BOOTSTRAP.md` ให้ Senior สร้าง Fix Session Prompt สำหรับ findings ทั้ง 3 ข้อ ห้ามเปิด SESSION-003, push, PR หรือ merge SESSION-002 จนกว่า fixes, Independent Review และ provider gates ผ่าน
+Program Lead อาจอนุญาตให้เปิด SESSION-003 ใน isolated worktree เป็นงานถัดไปได้ แต่ checkpoint นี้ยังไม่เปิด SESSION-003 และยังไม่เปลี่ยน WP-01 เป็น ✅ verified

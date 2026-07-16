@@ -21,6 +21,7 @@
 | `SESSION-002-FIX-05-REVIEW` | Independent review | Review `55697368` | complete | `PASS`; no findings |
 | `SESSION-002-ACCEPTANCE` | Provider and delivery | CI `29480176412`; PR #8; merge `e5446736` | complete | Neon, GitHub, Vercel, merge, and cleanup passed |
 | `WP-01-SENIOR-CONTROL` | Senior control | Branch `codex/wp-01-senior-control` | current checkpoint complete | SESSION-002 accepted; WP-01 remains `in_progress` |
+| `SESSION-003` | Authentication and auth email | Isolated Codex worktree from `e5446736` | `IN_PROGRESS / DECISION RETURNED` | D-011 preserves atomicity and requires a public-contract compatibility spike before implementation |
 
 ## Control notes
 

@@ -77,3 +77,61 @@ does not open it and does not mark WP-01 verified.
 
 **Reason:** WP-01 still requires its authentication, profile/session,
 authorization, and final work-package exit evidence.
+
+## D-011 — Better Auth transaction boundary for SESSION-003
+
+**Decision:** Preserve the approved atomic signup/reset invariant. SESSION-003
+may implement Learning Hub-owned orchestration that opens one outer Drizzle
+transaction and invokes only Better Auth's documented public server API through
+the official Drizzle adapter bound to that same transaction. The implementation
+must not write Better Auth credential/token tables directly, use database
+`after` hooks for atomic work, import private Better Auth modules, depend on
+undocumented transaction internals, or hide incompatibility with `as any`,
+`@ts-ignore`, or equivalent casts.
+
+Before the implementation plan is finalized, a focused compatibility spike
+must prove all of the following with public types and executable tests:
+
+1. the official Drizzle adapter accepts the transaction-scoped database object;
+2. forced failure after the Better Auth operation rolls back the mapped auth
+   rows together with profile, policy acceptance, minimal signup audit, and
+   encrypted email outbox rows;
+3. verification/reset email callbacks are awaited inside the outer transaction,
+   so token/verification and outbox writes commit or roll back together;
+4. public sign-up, verification, and password-reset entry points cannot bypass
+   the Learning Hub orchestration boundary.
+
+SESSION-003 may create the minimal profile, policy-acceptance, and identity-audit
+schema required by signup atomicity. Profile settings/history, the general audit
+service, 2FA, and other SESSION-004/005 behavior remain deferred.
+
+If any proof fails, SESSION-003 must stop and return the exact incompatibility.
+It is not authorized to weaken the invariant to compensating eventual
+consistency or to implement a custom adapter/plugin against private internals.
+
+**Reason:** Better Auth 1.6.23 queues database `after` hooks after its internal
+transaction and its email callbacks do not expose a documented transaction
+handle. An application-owned outer transaction can preserve the approved
+product invariant only if the official public adapter/API can be demonstrably
+bound to that transaction. The spike prevents architecture-by-cast or silent
+fallback to non-atomic behavior.
+
+## D-012 — Neon tooling for the SESSION-003 compatibility proof
+
+**Decision:** Use the connected Neon plugin/MCP for the one-off SESSION-003
+compatibility proof: create an exact disposable non-default, non-protected
+branch with its own compute and test database, run the migration and atomic
+rollback proof, record only non-secret identifiers/results, then delete the
+branch. The default/production branch must remain read-only and untouched.
+
+Do not add `@neon/sdk` to the application runtime to solve the Better Auth
+transaction conflict. Add the SDK only in a later, separately reviewed
+dev/CI-infrastructure change if Learning Hub needs repeatable programmatic branch
+provisioning; in that case it must stay outside runtime imports and use external
+`NEON_API_KEY` injection without logging connection strings.
+
+**Reason:** Neon SDK/MCP controls provider resources and makes real PostgreSQL
+acceptance reproducible, but it does not provide Better Auth's application
+transaction context. MCP is the smaller tool for an agent-operated one-off
+proof; `@neon/sdk` is appropriate only when provisioning itself becomes a
+maintained repository capability.

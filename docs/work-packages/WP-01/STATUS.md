@@ -6,7 +6,7 @@
 
 **Work package state:** `in_progress`
 
-**Current checkpoint:** SESSION-002 accepted, merged, and cleaned up
+**Current checkpoint:** SESSION-003 compatibility decision D-013 returned
 
 **SESSION-002 verdict:** `PASS`
 
@@ -47,8 +47,16 @@ profile/session, authorization, and remaining WP-01 acceptance slices are still
 required. The production dependency audit also continues to report moderate
 PostCSS advisories below the configured high-severity threshold.
 
+SESSION-003 has passed its D-011 transaction-scoped adapter and Neon rollback
+proof. Better Auth `1.6.23` does not invalidate an earlier password-reset token
+when the user requests another one. D-013 keeps the approved single-active-token
+contract and permits only a narrowly scoped, serialized deletion of that
+account's prior reset-verification rows inside the same outer transaction.
+
 ## Next control action
 
-Program Lead may authorize SESSION-003 as a new isolated session. This
-checkpoint does not open SESSION-003 or WP-02. WP-01 remains `in_progress` and
-must not be marked `verified` until its complete exit gate passes.
+SESSION-003 may resume only with the D-013 compatibility tests for sequential,
+concurrent, rollback, namespace-isolation, generic-response, and rate-limit
+behavior. Production implementation may begin only after those tests pass.
+SESSION-003 remains prohibited from push, PR, merge, production/default Neon
+mutation, opening SESSION-004, or marking WP-01 verified.

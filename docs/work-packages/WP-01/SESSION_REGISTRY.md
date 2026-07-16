@@ -21,12 +21,13 @@
 | `SESSION-002-FIX-05-REVIEW` | Independent review | Review `55697368` | complete | `PASS`; no findings |
 | `SESSION-002-ACCEPTANCE` | Provider and delivery | CI `29480176412`; PR #8; merge `e5446736` | complete | Neon, GitHub, Vercel, merge, and cleanup passed |
 | `WP-01-SENIOR-CONTROL` | Senior control | Branch `codex/wp-01-senior-control` | current checkpoint complete | SESSION-002 accepted; WP-01 remains `in_progress` |
-| `SESSION-003` | Authentication and auth email | Isolated Codex worktree from `e5446736` | `IN_PROGRESS / DECISION RETURNED` | D-011 preserves atomicity and requires a public-contract compatibility spike before implementation |
+| `SESSION-003` | Authentication and auth email | Branch `codex/wp-01-session-003` from `e5446736` | `IN_PROGRESS / D-013 RETURNED` | D-011/D-012 proofs passed; D-013 preserves single-active reset tokens via narrowly scoped transactional invalidation and requires rollback/concurrency proof before implementation |
 
 ## Control notes
 
 - Production/default Neon and Vercel Production were not changed.
-- SESSION-003 is not opened by this checkpoint.
+- SESSION-003 is open in its isolated worktree; production implementation remains
+  paused until the D-013 extension to the compatibility spike passes.
 - WP-02 remains closed.
 - No leaf session may mark WP-01 verified; the full WP exit gate remains with
   Program Lead.

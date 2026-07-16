@@ -6,6 +6,7 @@
 
 **Current disposition:** D-001 through D-006 record the original remediation
 control decision. D-007 through D-010 record the completed acceptance outcome.
+D-011 through D-013 govern the active SESSION-003 compatibility boundary.
 
 ## D-001 — SESSION-002 verdict
 
@@ -84,7 +85,8 @@ authorization, and final work-package exit evidence.
 may implement Learning Hub-owned orchestration that opens one outer Drizzle
 transaction and invokes only Better Auth's documented public server API through
 the official Drizzle adapter bound to that same transaction. The implementation
-must not write Better Auth credential/token tables directly, use database
+must not write Better Auth credential/token tables directly except for the
+narrow reset-verification invalidation authorized by D-013, use database
 `after` hooks for atomic work, import private Better Auth modules, depend on
 undocumented transaction internals, or hide incompatibility with `as any`,
 `@ts-ignore`, or equivalent casts.
@@ -135,3 +137,51 @@ acceptance reproducible, but it does not provide Better Auth's application
 transaction context. MCP is the smaller tool for an agent-operated one-off
 proof; `@neon/sdk` is appropriate only when provisioning itself becomes a
 maintained repository capability.
+
+## D-013 — Single-active password-reset token compatibility
+
+**Decision:** Preserve the approved contract that a repeated password-reset
+request invalidates every earlier reset token for that account. Keep Better
+Auth `1.6.23` pinned for SESSION-003; do not weaken the product contract or
+switch versions without a separate compatibility proof.
+
+D-011 is amended only as follows: Learning Hub's password-reset request
+orchestrator may directly delete mapped `identity_verifications` rows when all
+of these conditions hold:
+
+1. the rows belong to the resolved account, their identifier is in the exact
+   Better Auth `reset-password:` namespace, and no other verification purpose
+   can match the deletion predicate;
+2. the orchestrator first serializes reset requests for that account with a
+   PostgreSQL row lock on the canonical identity-account row;
+3. deletion of earlier reset rows, Better Auth's documented public
+   `requestPasswordReset` call, the awaited encrypted-email-outbox callback,
+   and the minimal audit write all use the same outer Drizzle transaction and
+   transaction-scoped official adapter established by D-011;
+4. every public password-reset request route is forced through this
+   orchestrator; there is no raw Better Auth route that can bypass it;
+5. application code does not create reset tokens, write password hashes, call
+   Better Auth private/internal APIs, or use casts to reach an undocumented
+   adapter contract.
+
+Before production implementation, extend the compatibility spike to prove:
+
+- after two sequential requests, the first token receives the documented
+  invalid-token HTTP 400 result and only the second token succeeds once;
+- concurrent requests for one account serialize and leave exactly one usable
+  reset token; that token corresponds to the later committed request and every
+  older outbox message carries a token that is rejected;
+- a forced failure after invalidation or outbox creation rolls back the entire
+  new request and leaves the previously committed token usable;
+- invalidation cannot delete email-verification or other verification rows;
+- the generic unknown-email response and rate-limit behavior remain unchanged.
+
+If any proof fails, SESSION-003 must stop again. It is not authorized to broaden
+direct writes beyond the exact reset-verification deletion described here.
+
+**Reason:** Better Auth `1.6.23` creates a fresh
+`reset-password:<random-token>` verification row for every request and consumes
+only the token presented during reset. Its documented public API therefore does
+not implement Learning Hub's single-active-token contract. The narrow mapped
+row deletion closes that semantic gap while the account row lock and the outer
+transaction preserve atomicity under rollback and concurrent requests.

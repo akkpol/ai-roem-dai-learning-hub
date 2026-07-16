@@ -21,7 +21,7 @@
 
 - Neon project `ai-roem-dai-learning-hub`: สร้าง branch/database ชั่วคราวตามแผน ห้าม reset default branch และห้ามเปิดเผย connection string
 - Vercel project `ai-roem-dai-learning-hub`: ทดสอบเฉพาะ PR Preview ห้าม deploy Production
-- GitHub CI ต้องผ่าน PostgreSQL integration suite; Docker local เป็นทางเลือก ไม่ใช่หลักฐานแทน CI/Neon
+- GitHub CI ต้องผ่าน PostgreSQL integration suite บน Neon test branch ที่ operator อนุมัติ; ห้ามใช้ local container runtime เป็นหลักฐานแทน CI/Neon
 
 ห้าม auto-migrate ตอน build/start, ห้ามใช้ migration credential ใน runtime และห้ามบันทึก secret ลง Git, PR, log หรือ handoff
 

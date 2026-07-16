@@ -2,9 +2,9 @@
 
 **อัปเดตล่าสุด:** 2026-07-15
 
-**ตอนนี้อยู่ที่:** WP-01 Spec อนุมัติแล้ว — SESSION-002 พร้อมเริ่ม
+**ตอนนี้อยู่ที่:** WP-01 Spec อนุมัติแล้ว — SESSION-002 ส่งให้ Lead review แล้ว
 
-**งานเขียนโค้ดที่เปิดอยู่:** ยังไม่มี — Prompt Packet ของ SESSION-002 พร้อมแล้ว
+**งานเขียนโค้ดที่เปิดอยู่:** ไม่มี — handoff ของ SESSION-002 รอ Lead ตรวจ
 
 **เอกสารที่อนุมัติแล้ว:** [WP-01 Platform Foundation and Identity Design](../superpowers/specs/2026-07-15-platform-foundation-and-identity-design.md)
 
@@ -35,4 +35,4 @@
 
 ## งานถัดไป
 
-เปิด Coding Session ใหม่จาก Prompt Packet `docs/prompts/SESSION-002-POSTGRESQL-FOUNDATION.md` ใน isolated worktree
+Lead จัด Neon test branch และ external CI configuration, ตรวจ handoff ของ SESSION-002 และหลักฐาน Neon/CI ก่อนเริ่ม SESSION-003

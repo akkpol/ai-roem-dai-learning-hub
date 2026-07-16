@@ -6,7 +6,7 @@
 
 **Work package state:** `in_progress`
 
-**Current checkpoint:** SESSION-003 independent review active
+**Current checkpoint:** SESSION-003-FIX-01 active after `CHANGES_REQUIRED`
 
 **SESSION-002 verdict:** `PASS`
 
@@ -54,14 +54,19 @@ contract and permits only a narrowly scoped, serialized deletion of that
 account's prior reset-verification rows inside the same outer transaction.
 
 The implementation leaf is complete at `ca4d33f5e34d70a0b30b88b838d07e7c0e859838`
-with handoff `ea2945b482fd07071df76be5d99f501743429a1b`. Its
-worktree is clean. These are submitted claims, not an acceptance verdict;
-SESSION-003 independent review is active in task
-`019f6b5f-8dd4-79c3-90b4-2f69c00bbda9` against that exact head.
+with handoff `ea2945b482fd07071df76be5d99f501743429a1b`. Independent
+review commit `892aa847a332c13da66fec9f04690d9feb4863d7` returned
+`CHANGES_REQUIRED`: three High findings cover signup enumeration, spoofable
+rate-limit identity/wrong signup window, and D-013 tests that exercise a
+duplicate spike rather than production orchestration; two Medium findings
+cover fail-open origin/host handling and the reset page not consuming its link
+token. SESSION-003-FIX-01 is active in task
+`019f6b75-a8be-7180-adef-7358e0a7a21f`.
 
 ## Next control action
 
-Wait for the independent review's exact `PASS` or `CHANGES_REQUIRED` verdict.
-Do not push, open a PR, merge, mutate production/default Neon, open SESSION-004,
-or mark WP-01 verified before the Senior reviews that artifact and its fresh
-gate evidence.
+Complete the five scoped FIX-01 findings, independently verify that remediation,
+then proceed to push, PR, GitHub CI, disposable Neon and Vercel Preview
+acceptance. Merge may occur only after those gates pass. Production deployment
+requires its own controlled migration/configuration rollout after merge; do not
+open SESSION-004 or mark WP-01 verified from SESSION-003 delivery alone.

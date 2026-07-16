@@ -22,13 +22,14 @@
 | `SESSION-002-ACCEPTANCE` | Provider and delivery | CI `29480176412`; PR #8; merge `e5446736` | complete | Neon, GitHub, Vercel, merge, and cleanup passed |
 | `WP-01-SENIOR-CONTROL` | Senior control | Branch `codex/wp-01-senior-control` | current checkpoint complete | SESSION-002 accepted; WP-01 remains `in_progress` |
 | `SESSION-003` | Authentication and auth email | Implementation `ca4d33f5`; handoff `ea2945b4` | implementation complete | D-011/D-012/D-013 compatibility, implementation, provider evidence, local gates, and clean handoff reported; awaiting independent verdict |
-| `SESSION-003-REVIEW` | Independent authentication review | Task `019f6b5f-8dd4-79c3-90b4-2f69c00bbda9`; exact head `ea2945b4` | `IN_PROGRESS` | Read-only implementation review with fresh local gates; provider mutation prohibited |
+| `SESSION-003-REVIEW` | Independent authentication review | Review `892aa847`; exact head `ea2945b4` | complete | `CHANGES_REQUIRED`; three High and two Medium findings despite passing local gates |
+| `SESSION-003-FIX-01` | Authentication review remediation | Task `019f6b75-a8be-7180-adef-7358e0a7a21f`; base `ea2945b4` | `IN_PROGRESS` | Fix only enumeration, rate-limit/IP trust, production-path D-013 proof, origin/host validation, and reset-link token flow |
 
 ## Control notes
 
 - Production/default Neon and Vercel Production were not changed.
-- SESSION-003 implementation is committed and clean. Independent review is
-  active; no PASS or delivery decision exists yet.
+- SESSION-003 independent review returned `CHANGES_REQUIRED`. FIX-01 is active;
+  no PASS or delivery decision exists yet.
 - WP-02 remains closed.
 - No leaf session may mark WP-01 verified; the full WP exit gate remains with
   Program Lead.

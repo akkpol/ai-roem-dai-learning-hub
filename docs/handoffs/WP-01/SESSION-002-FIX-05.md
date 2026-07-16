@@ -90,12 +90,33 @@ contract.
 - `tests/platform/event-outbox-sql.test.ts`
 - `docs/handoffs/WP-01/SESSION-002-FIX-05.md` (this separate handoff commit)
 
+## Controller Acceptance Evidence
+
+- Independent review: **PASS**, review commit
+  `55697368666f773d31b5eb3b24ab748e4a7ead73`; no findings.
+- PR head after integrating this fix: `22c282f451c9bb3f8d3644ad46fb4c2f148d0f62`.
+- GitHub Actions run `29479559185`: **PASS**. The required Neon gate migrated
+  the disposable database and passed 3 integration files / 8 tests, including
+  rollback, dedupe, least-privilege denial, future-table denial, and repeatable
+  migration checks.
+- Neon disposable branch `br-cool-bar-ao4veyoj`: confirmed non-default and
+  unprotected. Live catalog inspection found both event tables, four expected
+  indexes, expected primary/check constraints, non-elevated group/login roles,
+  inherited group membership, schema USAGE without CREATE, no table-wide
+  grants, and only the approved column grants.
+- Vercel Preview deployment `dpl_2E4TxZfPQc5F7YdjH7v4Jb3Wsx4d` for the exact
+  PR head: **READY**. The Next.js 16.2.10 build completed successfully;
+  `/api/health/live` returned HTTP 200 with `status=ok`, and
+  `/api/health/ready` returned HTTP 200 with `database=ready`. Preview runtime
+  logs recorded two HTTP 200 requests and no error/fatal entries.
+
 ## Residual Risk and Explicit Non-Actions
 
-- Live Neon integration/privilege validation: **NOT RUN** in this leaf. The
-  controller must rerun it after independent review.
-- Neon/provider access or mutation: **NOT RUN**.
-- GitHub secrets/variables, push, PR update, merge, and deployment: **NOT RUN**.
+- The disposable Neon branch, temporary GitHub acceptance secrets/variables,
+  and isolated worktrees remain until the PR is merged, then must be removed.
+- Production/default Neon branch mutation: **NOT RUN**.
+- Production Vercel promotion/deployment: **NOT RUN**.
+- PR merge: **NOT RUN** at the time this evidence was recorded.
 - SESSION-003: **NOT OPENED**.
 - The production audit threshold passes, but npm continues to report the two
   moderate PostCSS advisories noted above.

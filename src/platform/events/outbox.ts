@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 
 import type { DomainEventInput } from "./domain-event";
@@ -8,15 +10,17 @@ export async function enqueueDomainEvent(
   input: DomainEventInput,
 ): Promise<string> {
   const id = crypto.randomUUID();
-  await tx.insert(platformEventOutbox).values({
-    id,
-    eventType: input.eventType,
-    aggregateType: input.aggregateType,
-    aggregateId: input.aggregateId,
-    payload: input.payload,
-    occurredAt: input.occurredAt,
-    availableAt: input.availableAt ?? input.occurredAt,
-  });
+  await tx.execute(sql`insert into ${platformEventOutbox} (
+    "id", "event_type", "aggregate_type", "aggregate_id", "payload", "occurred_at", "available_at"
+  ) values (
+    ${sql.param(id, platformEventOutbox.id)},
+    ${sql.param(input.eventType, platformEventOutbox.eventType)},
+    ${sql.param(input.aggregateType, platformEventOutbox.aggregateType)},
+    ${sql.param(input.aggregateId, platformEventOutbox.aggregateId)},
+    ${sql.param(input.payload, platformEventOutbox.payload)},
+    ${sql.param(input.occurredAt, platformEventOutbox.occurredAt)},
+    ${sql.param(input.availableAt ?? input.occurredAt, platformEventOutbox.availableAt)}
+  )`);
   return id;
 }
 
@@ -24,10 +28,11 @@ export async function registerEventConsumption(
   tx: DatabaseTransaction,
   input: { consumerName: string; eventId: string },
 ): Promise<boolean> {
-  const rows = await tx
-    .insert(platformEventConsumptions)
-    .values(input)
-    .onConflictDoNothing()
-    .returning({ eventId: platformEventConsumptions.eventId });
-  return rows.length === 1;
+  const result = await tx.execute(sql`insert into ${platformEventConsumptions} (
+    "consumer_name", "event_id"
+  ) values (
+    ${sql.param(input.consumerName, platformEventConsumptions.consumerName)},
+    ${sql.param(input.eventId, platformEventConsumptions.eventId)}
+  ) on conflict do nothing returning "event_id"`);
+  return result.rowCount === 1;
 }

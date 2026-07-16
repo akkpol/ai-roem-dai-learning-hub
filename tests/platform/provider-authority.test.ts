@@ -9,7 +9,7 @@ import {
 
 const projectId = "raspy-feather-85795196";
 const branchId = "br-session-002";
-const branchName = "session-002-fix-03";
+const branchName = "session-002-acceptance-fix-04";
 const endpointId = "ep-session-002";
 const endpointHost =
   "ep-session-002.ap-southeast-1.aws.neon.tech";
@@ -250,7 +250,7 @@ describe("SESSION-002 Neon provider authority", () => {
   it("rejects request, approval mirrors, and acknowledgement changed together", async () => {
     const changed = {
       NEON_BRANCH_ID: "br-consistently-changed",
-      NEON_BRANCH_NAME: "session-002-changed",
+      NEON_BRANCH_NAME: "session-002-acceptance-changed",
       NEON_ENDPOINT_ID: "ep-consistently-changed",
       NEON_ENDPOINT_HOSTNAME:
         "ep-consistently-changed.ap-southeast-1.aws.neon.tech",
@@ -275,9 +275,9 @@ describe("SESSION-002 Neon provider authority", () => {
   });
 
   it.each([
-    { id: branchId, project_id: projectId, name: branchName, default: true },
-    { id: "br-solitary-cell-aorxyd0b", project_id: projectId, name: branchName, default: false },
-    { id: branchId, project_id: projectId, name: "preview-production-copy", default: false },
+    { id: branchId, project_id: projectId, name: branchName, default: true, protected: false },
+    { id: "br-solitary-cell-aorxyd0b", project_id: projectId, name: branchName, default: false, protected: false },
+    { id: branchId, project_id: projectId, name: "preview/production-copy", default: false, protected: false },
   ])("rejects a provider default or production-like branch", async (branch) => {
     await expectProviderRejected(
       remoteEnvironment({
@@ -287,6 +287,53 @@ describe("SESSION-002 Neon provider authority", () => {
       providerFetch({ branch }),
     );
   });
+
+  it.each([
+    "session-002-acceptance-release.1",
+    "session-002-acceptance-release 1",
+    "session-002-acceptance-release_1",
+    "session-002-acceptance-Release",
+    "session-002-acceptance-release!",
+    "session-002-acceptance-",
+    "session-002-acceptance-production-copy",
+    "session-002-acceptance-prod-copy",
+    "session-002-acceptance-main-copy",
+    "session-002-acceptance-master-copy",
+    "session-002-acceptance-default-copy",
+    "session-002-acceptance-staging-copy",
+    "session-002-acceptance-stage-copy",
+  ])("rejects provider branch name %s outside the disposable acceptance contract", async (name) => {
+    await expectProviderRejected(
+      remoteEnvironment({ NEON_BRANCH_NAME: name }),
+      providerFetch({
+        branch: {
+          id: branchId,
+          project_id: projectId,
+          name,
+          default: false,
+          protected: false,
+        },
+      }),
+    );
+  });
+
+  it.each([undefined, null, "false", 0, true])(
+    "rejects provider branch protected=%s",
+    async (protectedValue) => {
+      await expectProviderRejected(
+        remoteEnvironment(),
+        providerFetch({
+          branch: {
+            id: branchId,
+            project_id: projectId,
+            name: branchName,
+            default: false,
+            protected: protectedValue,
+          },
+        }),
+      );
+    },
+  );
 
   it("rejects an endpoint not bound by the provider to the requested branch", async () => {
     await expectProviderRejected(

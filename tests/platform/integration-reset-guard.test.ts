@@ -6,7 +6,7 @@ import { assertSafeIntegrationReset } from "../integration/database/global-setup
 const approvedIdentity = {
   NEON_PROJECT_ID: "raspy-feather-85795196",
   NEON_BRANCH_ID: "br-session-002",
-  NEON_BRANCH_NAME: "session-002-580e95d2",
+  NEON_BRANCH_NAME: "session-002-acceptance-580e95d2",
   NEON_BRANCH_IS_DEFAULT: "false",
   NEON_ENDPOINT_ID: "ep-session-002",
   NEON_ENDPOINT_HOSTNAME: "ep-session-002.ap-southeast-1.aws.neon.tech",
@@ -43,6 +43,7 @@ const fetchProviderAuthority: typeof fetch = async (request) => {
     project_id: approvedIdentity.NEON_PROJECT_ID,
     name: approvedIdentity.NEON_BRANCH_NAME,
     default: false,
+    protected: false,
   } });
 };
 

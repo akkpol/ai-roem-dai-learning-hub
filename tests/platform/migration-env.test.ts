@@ -6,13 +6,13 @@ const remoteIdentity = {
   NEON_API_KEY: "provider-api-secret",
   NEON_PROJECT_ID: "raspy-feather-85795196",
   NEON_BRANCH_ID: "br-session-002",
-  NEON_BRANCH_NAME: "session-002-580e95d2",
+  NEON_BRANCH_NAME: "session-002-acceptance-580e95d2",
   NEON_BRANCH_IS_DEFAULT: "false",
   NEON_ENDPOINT_ID: "ep-session-002",
   NEON_ENDPOINT_HOSTNAME: "ep-session-002.ap-southeast-1.aws.neon.tech",
   NEON_DATABASE_NAME: "learning_hub_session_002_test",
   SESSION_002_APPROVED_NEON_BRANCH_ID: "br-session-002",
-  SESSION_002_APPROVED_NEON_BRANCH_NAME: "session-002-580e95d2",
+  SESSION_002_APPROVED_NEON_BRANCH_NAME: "session-002-acceptance-580e95d2",
   SESSION_002_APPROVED_NEON_ENDPOINT_ID: "ep-session-002",
   SESSION_002_APPROVED_NEON_ENDPOINT_HOSTNAME:
     "ep-session-002.ap-southeast-1.aws.neon.tech",
@@ -40,6 +40,7 @@ const fetchProviderAuthority: typeof fetch = async (request) => {
     project_id: remoteIdentity.NEON_PROJECT_ID,
     name: remoteIdentity.NEON_BRANCH_NAME,
     default: false,
+    protected: false,
   } });
 };
 

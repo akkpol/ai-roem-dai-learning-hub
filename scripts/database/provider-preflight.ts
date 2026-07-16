@@ -9,7 +9,10 @@ import {
 const approvedProjectId = "raspy-feather-85795196";
 const forbiddenDefaultBranchId = "br-solitary-cell-aorxyd0b";
 const neonApiBaseUrl = "https://console.neon.tech/api/v2";
-const forbiddenBranchNameToken = /(?:^|[-_])(default|main|prod|production)(?:$|[-_])/i;
+const disposableBranchName =
+  /^session-002-acceptance-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const forbiddenBranchNameToken =
+  /(production|prod|main|master|default|staging|stage)/;
 
 type Environment = Record<string, string | undefined>;
 
@@ -128,13 +131,16 @@ async function validateApprovedRemoteTarget(
   const branchProjectId = providerString(branch.project_id);
   const branchName = providerString(branch.name);
   const branchIsDefault = providerBoolean(branch.default);
+  const branchIsProtected = providerBoolean(branch.protected);
 
   if (
     branchId !== requested.branchId ||
     branchProjectId !== approvedProjectId ||
     branchName !== requested.branchName ||
     branchIsDefault ||
+    branchIsProtected ||
     branchId === forbiddenDefaultBranchId ||
+    !disposableBranchName.test(branchName) ||
     forbiddenBranchNameToken.test(branchName) ||
     input.NEON_BRANCH_IS_DEFAULT !== "false"
   ) {

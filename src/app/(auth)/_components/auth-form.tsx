@@ -17,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 type Kind = "sign-up" | "sign-in" | "forgot-password" | "reset-password";
 type FormStatus = { tone: "success" | "error"; message: string } | null;
-type ValidatedField = "displayName" | "email" | "password";
+type ValidatedField = "displayName" | "email" | "password" | "ageAttested";
 
 const endpoints: Record<Kind, string> = {
   "sign-up": "/api/auth/sign-up",
@@ -70,20 +70,26 @@ export function AuthForm({
     if (
       input.name === "displayName" ||
       input.name === "email" ||
-      input.name === "password"
+      input.name === "password" ||
+      input.name === "ageAttested"
     ) {
       return input.name;
     }
   }
 
-  function markInvalid(event: FormEvent<HTMLInputElement>) {
-    const name = fieldName(event.currentTarget);
+  function markInvalid(event: FormEvent<HTMLFormElement>) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+
+    const name = fieldName(target);
     if (!name) return;
 
     const message =
-      name === "email" && event.currentTarget.validity.typeMismatch
+      name === "ageAttested"
+        ? "กรุณายืนยันว่าคุณมีอายุ 18 ปีขึ้นไป"
+        : name === "email" && target.validity.typeMismatch
         ? "กรุณากรอกอีเมลให้ถูกต้อง"
-        : name === "password" && event.currentTarget.validity.tooShort
+        : name === "password" && target.validity.tooShort
           ? "รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร"
           : "กรุณากรอกข้อมูลในช่องนี้";
 
@@ -149,7 +155,7 @@ export function AuthForm({
   }
 
   return (
-    <form aria-busy={submitting} onSubmit={submit}>
+    <form aria-busy={submitting} onInvalid={markInvalid} onSubmit={submit}>
       <FieldGroup>
         {kind === "sign-up" && (
           <Field data-invalid={Boolean(fieldErrors.displayName)}>
@@ -167,7 +173,6 @@ export function AuthForm({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              onInvalid={markInvalid}
               onInput={clearInvalid}
             />
             <FieldDescription id="displayName-description">
@@ -195,7 +200,6 @@ export function AuthForm({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              onInvalid={markInvalid}
               onInput={clearInvalid}
             />
             {kind === "forgot-password" && (
@@ -227,7 +231,6 @@ export function AuthForm({
               ]
                 .filter(Boolean)
                 .join(" ")}
-              onInvalid={markInvalid}
               onInput={clearInvalid}
             />
             {kind !== "sign-in" && (
@@ -241,12 +244,33 @@ export function AuthForm({
 
         {kind === "sign-up" && (
           <>
-            <Field orientation="horizontal">
-              <Checkbox id="ageAttested" name="ageAttested" value="on" isRequired />
+            <Field
+              data-invalid={Boolean(fieldErrors.ageAttested)}
+              orientation="horizontal"
+            >
+              <Checkbox
+                id="ageAttested"
+                name="ageAttested"
+                value="on"
+                isInvalid={Boolean(fieldErrors.ageAttested)}
+                isRequired
+                aria-describedby={
+                  fieldErrors.ageAttested ? "ageAttested-error" : undefined
+                }
+                onChange={() =>
+                  setFieldErrors((current) => ({
+                    ...current,
+                    ageAttested: undefined,
+                  }))
+                }
+              />
               <FieldLabel htmlFor="ageAttested">
                 ฉันยืนยันว่ามีอายุ 18 ปีขึ้นไป
               </FieldLabel>
             </Field>
+            <FieldError id="ageAttested-error">
+              {fieldErrors.ageAttested}
+            </FieldError>
             <FieldDescription>
               เมื่อสร้างบัญชี คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว
             </FieldDescription>

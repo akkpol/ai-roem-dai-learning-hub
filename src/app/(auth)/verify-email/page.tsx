@@ -8,14 +8,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { EmptyMedia } from "@/components/ui/empty";
 
 export default function VerifyEmailPage() {
   return (
     <Card>
       <CardHeader>
-        <div className="bg-muted text-foreground flex size-10 items-center justify-center rounded-full">
-          <MailCheckIcon className="size-5" aria-hidden="true" />
-        </div>
+        <EmptyMedia variant="icon">
+          <MailCheckIcon aria-hidden="true" />
+        </EmptyMedia>
         <CardTitle>
           <h1>ยืนยันอีเมล</h1>
         </CardTitle>

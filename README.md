@@ -7,20 +7,20 @@ Learning Hub คือแพลตฟอร์ม Marketplace การเรี
 ## Source of truth
 
 - [Product and system design](docs/product/PRODUCT_AND_SYSTEM_DESIGN.md)
-- [Project status — สถานะปัจจุบันแบบสั้น](docs/project/PROJECT_STATUS.md)
+- [Lean delivery playbook](docs/project/LEAN_DELIVERY_PLAYBOOK.md)
 - [Master roadmap](docs/project/MASTER_ROADMAP.md)
 - [UI delivery standard](docs/project/UI_DELIVERY_STANDARD.md)
-- [Legacy inventory](docs/project/LEGACY_INVENTORY.md)
 
 ห้ามเริ่มฟีเจอร์ใหม่จากข้อความในโค้ด ข้อมูล demo หรือ commit เก่า หากข้อกำหนดไม่อยู่ในเอกสารต้นทาง ให้แก้และอนุมัติเอกสารก่อนพัฒนา
 
 ## Current status
 
-- Product direction: approved
-- Architecture direction: approved
-- Legacy data migration: not required
-- Implementation: paused until subsystem plans are written and reviewed
+เอกสารใน repository ไม่ทำหน้าที่เป็น live status เพราะทำให้ข้อมูลซ้ำและล้าสมัย
+ให้ตรวจ `origin/main`, active pull request และ CI/provider evidence ของ commit
+เดียวกันตาม [Lean delivery playbook](docs/project/LEAN_DELIVERY_PLAYBOOK.md)
 
 ## AI delivery control
 
-Technical Lead เป็นผู้กำหนด work package, ตรวจ evidence, อัปเดต roadmap และออก Prompt Packet ให้ Coding Session ทีละงาน Coding Session ไม่มีสิทธิ์ขยาย scope หรือประกาศงานว่า verified เอง
+Product Owner กำหนดผลลัพธ์และ contract ส่วน Lead เลือก slice กับ risk tier
+Implementation, review fixes และ re-review ใช้ branch/PR เดียวกันเมื่อปลอดภัย
+และ reuse หลักฐานของ commit เดิม ห้ามขยาย scope หรือประกาศงานว่า verified เอง

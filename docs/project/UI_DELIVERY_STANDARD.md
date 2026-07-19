@@ -94,8 +94,9 @@ Rules:
 - Never use `--overwrite` without explicit approval.
 - Read every added file and verify imports, composition, icon library, client
   boundaries, and accessibility before continuing.
-- Community registries are deny-by-default. The Prompt Packet must name the
-  registry and item, and the handoff must record the source and review result.
+- Community registries are deny-by-default. The task contract must name the
+  registry and item, and the pull request must record the source and review
+  result.
 - Use `apply`, preset changes, migrations, or `eject` only in a separately
   authorized maintenance session. `eject` is irreversible and is prohibited by
   default.
@@ -217,14 +218,18 @@ and error recovery at representative mobile and desktop widths.
 
 ## 10. Required evidence and gates
 
-A user-facing implementation handoff must record:
+Use the risk tier, evidence-reuse contract, and single-PR workflow in
+`docs/project/LEAN_DELIVERY_PLAYBOOK.md`. Evidence belongs to the exact commit
+that produced it and must not be rerun solely because implementation moved to
+review or Lead control.
+
+A user-facing pull request records the applicable evidence:
 
 1. `shadcn info --json` summary: base, style, aliases, icon library, Tailwind
    version, and installed components.
 2. Components/blocks added, explicit registry provenance, docs consulted, and
    dry-run/diff review.
-3. Architecture, lint, typecheck, focused tests, full tests, build, and
-   dependency audit results.
+3. Focused local checks and the required CI gates for the selected risk tier.
 4. Browser task evidence on desktop and mobile using production build or a
    production-equivalent server.
 5. Keyboard-only path, visible focus, focus trapping/return for overlays, form
@@ -235,14 +240,16 @@ A user-facing implementation handoff must record:
 9. Exact `NOT RUN` or `BLOCKED` status for any missing provider, account, email,
    browser, or environment evidence.
 
-The independent UI review verdict is exactly `PASS`, `CHANGES_REQUIRED`, or
-`BLOCKED`. Local tests alone cannot produce `PASS`. A component being provided
-by shadcn does not waive product UX, accessibility, security, or provider
-acceptance.
+New journeys, global interaction patterns, and UI foundation changes require an
+independent UI review with the exact verdict `PASS`, `CHANGES_REQUIRED`, or
+`BLOCKED`. Minor copy, token-preserving styling, and isolated low-risk component
+changes use normal pull-request review. Local tests alone cannot prove browser
+acceptance. A component being provided by shadcn does not waive product UX,
+accessibility, security, or provider acceptance.
 
-## 11. Prompt Packet requirements
+## 11. Task contract requirements
 
-Every Prompt Packet that includes UI must:
+Every task contract that includes UI must:
 
 - list this document as a required source
 - state the exact user journey and acceptance states
@@ -251,10 +258,11 @@ Every Prompt Packet that includes UI must:
   the session is specifically authorized for foundation work
 - require CLI discovery and diff evidence
 - require browser and accessibility evidence
-- reserve independent review and final verdict for a separate review session
+- identify its Lean Delivery Playbook risk tier and whether independent review
+  is required
 
-If these inputs are missing, the Senior Engineer must complete the Prompt Packet
-before opening the implementation leaf.
+If these inputs are missing, the task owner must complete the task contract
+before implementation begins.
 
 ## 12. Official references
 

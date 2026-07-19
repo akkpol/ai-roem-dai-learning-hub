@@ -261,15 +261,23 @@ Report submitted → case triaged → evidence preserved → scoped action appli
 4. ห้าม AI เพิ่มฟีเจอร์หรือเปลี่ยน domain rule โดยไม่แก้ spec ก่อน
 5. หนึ่ง PR ต้องมี acceptance evidence และไม่รวม refactor ที่ไม่เกี่ยวข้อง
 6. การเปลี่ยน cross-module contract ต้องมี Architecture Decision Record
-7. ทุก task จบด้วย lint, typecheck, tests, build และ slice-specific E2E
+7. ทุก task ใช้ risk-based gates และ evidence reuse ตาม
+   `docs/project/LEAN_DELIVERY_PLAYBOOK.md`; full suite รันหนึ่งครั้งต่อ commit
+   ที่พร้อม merge ผ่าน CI แทนการรันซ้ำทุกบทบาท
 8. Reviewer ตรวจ spec compliance ก่อน code style
 9. ห้ามอ้างข้อความจาก legacy code เป็น requirement
 10. เมื่อ context ใหญ่เกินหนึ่ง subsystem ให้หยุดและแตก spec ใหม่
 11. Coding Session ทุกงานต้องเริ่มใน isolated Git worktree; `main` เป็นพื้นที่รวมงานที่ผ่าน review แล้วเท่านั้น
 12. งานที่สร้างหรือแก้ UI ต้องปฏิบัติตาม
-    `docs/project/UI_DELIVERY_STANDARD.md`; Prompt Packet ต้องระบุ user journey,
-    states, component/registry scope และ browser/accessibility evidence ก่อนเปิด
-    implementation session
+    `docs/project/UI_DELIVERY_STANDARD.md`; task contract ต้องระบุ user journey,
+    states, component/registry scope และ browser/accessibility evidence ก่อนเริ่ม
+    implementation
+13. ทุกงานใช้ `docs/project/LEAN_DELIVERY_PLAYBOOK.md` เพื่อเลือก risk tier,
+    reuse หลักฐานของ commit เดิม, ลดการเปิด task/review ซ้ำ และแยก hard stop
+    ออกจาก external acceptance ที่เลื่อนไปทำภายหลังได้
+14. สถานะปัจจุบันให้อ่านจาก `origin/main`, active pull request และ CI/provider
+    evidence ของ commit นั้น ห้ามใช้ plan, Prompt Packet, handoff หรือ review เก่า
+    เป็น live status
 
 ## 15. Legacy disposition
 
@@ -288,11 +296,13 @@ Report submitted → case triaged → evidence preserved → scoped action appli
 - ใช้ข้อมูลจริง ไม่มี demo/fake success
 - รองรับ loading, empty, error, retry และ concurrency ที่เกี่ยวข้อง
 - มี audit และ observability ตามระดับความเสี่ยง
-- ผ่าน domain, integration และ E2E tests ของ slice
+- ผ่าน gates ตาม risk tier ใน `docs/project/LEAN_DELIVERY_PLAYBOOK.md` และผ่าน
+  domain, integration หรือ E2E tests ที่เกี่ยวข้องกับ slice
 - ผ่าน `docs/project/UI_DELIVERY_STANDARD.md` เมื่อมี user-facing UI
 - ใช้งาน responsive และเข้าถึงได้ด้วย keyboard โดยพิสูจน์ task completion,
   focus, validation feedback และสถานะ loading/empty/success/error ที่เกี่ยวข้อง
-- deploy ผ่าน Preview gate และ production smoke test
+- deploy ผ่าน Preview/production-like gate เมื่อ risk tier หรือ release stage
+  กำหนด ไม่บังคับ deploy ซ้ำสำหรับ docs และ isolated low-risk changes
 - เอกสาร contract และ operations อัปเดตพร้อมโค้ด
 
 ## 17. First subsystem to design

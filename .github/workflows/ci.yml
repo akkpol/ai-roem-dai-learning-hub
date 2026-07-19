@@ -16,17 +16,43 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24.18.0
           cache: npm
-      - run: npm ci --ignore-scripts
-      - run: npm run architecture
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - name: Classify required gates
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        shell: bash
+        run: |
+          base_sha="$PR_BASE_SHA"
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="$PUSH_BEFORE_SHA"
+          fi
+          if [[ -z "$base_sha" || "$base_sha" =~ ^0+$ ]]; then
+            base_sha="$(git rev-parse HEAD^)"
+          fi
+          git diff --name-only "$base_sha" "$GITHUB_SHA" |
+            node scripts/ci/plan-gates.mjs >> "$GITHUB_OUTPUT"
+          git diff --check "$base_sha" "$GITHUB_SHA"
+      - if: steps.scope.outputs.code == 'true'
+        run: npm ci --ignore-scripts
+      - if: steps.scope.outputs.code == 'true'
+        run: npm run architecture
+      - if: steps.scope.outputs.code == 'true'
+        run: npm run lint
+      - if: steps.scope.outputs.code == 'true'
+        run: npm run typecheck
+      - if: steps.scope.outputs.code == 'true'
+        run: npm test
+      - if: steps.scope.outputs.code == 'true'
+        run: npm run build
       - name: Required Neon test-branch migration and integration gate
+        if: steps.scope.outputs.provider == 'true'
         env:
           DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ secrets.NEON_SESSION_002_MIGRATION_DATABASE_URL }}
@@ -70,10 +96,10 @@ jobs:
           npx tsx scripts/database/provider-preflight.ts
           npm run db:migrate
           npm run test:integration
-      - name: Production HTTP smoke test
+      - name: Application HTTP smoke test
+        if: steps.scope.outputs.code == 'true'
         shell: bash
         env:
-          DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/learning-hub.log 2>&1 &
@@ -86,6 +112,22 @@ jobs:
           done
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$app_url/")" = "200"
           test "$(curl --silent "$app_url/api/health/live")" = '{"status":"ok","service":"learning-hub"}'
+      - name: Provider readiness HTTP smoke test
+        if: steps.scope.outputs.provider == 'true'
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/learning-hub-provider.log 2>&1 &
+          server_pid=$!
+          trap 'kill $server_pid' EXIT
+          app_url=http://127.0.0.1:3000
+          for attempt in {1..30}; do
+            if curl --silent "$app_url/api/health/live" > /dev/null; then break; fi
+            sleep 1
+          done
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$app_url/api/health/ready")" = "200"
           test "$(curl --silent "$app_url/api/health/ready")" = '{"status":"ready","service":"learning-hub","dependencies":{"database":"ready"}}'
-      - run: npm audit --omit=dev --audit-level=high
+      - if: steps.scope.outputs.code == 'true'
+        run: npm audit --omit=dev --audit-level=high

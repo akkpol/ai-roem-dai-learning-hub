@@ -6,10 +6,19 @@ These rules apply to the whole repository.
 
 1. Product and system decisions come from
    `docs/product/PRODUCT_AND_SYSTEM_DESIGN.md`.
-2. User-interface work also follows
+2. Delivery flow, required gates, evidence reuse, review depth, and blocker
+   handling come from `docs/project/LEAN_DELIVERY_PLAYBOOK.md`.
+3. User-interface work also follows
    `docs/project/UI_DELIVERY_STANDARD.md`.
-3. A task-specific approved spec or Prompt Packet may narrow scope but may not
+4. A task-specific approved spec or task prompt may narrow scope but may not
    silently override either source of truth.
+
+Do not preload `docs/handoffs/**` or `docs/reviews/**`. They are historical
+evidence, not current requirements or project status. Read one only when the
+active task names its exact session, finding, decision, or commit. Read an
+approved file under `docs/superpowers/specs/**` only when the active slice
+depends on it. Live status comes from merged `origin/main`, the active pull
+request, and CI/provider evidence for its exact head.
 
 ## Git and task isolation
 
@@ -19,6 +28,13 @@ These rules apply to the whole repository.
 - Preserve unrelated and user-owned files. Stop if the required scope overlaps
   unexplained dirty state.
 - A leaf session may not mark a session or work package verified.
+- Keep implementation, review fixes, and re-review on one branch and pull
+  request unless scope, ownership, or safety requires isolation.
+- Follow the risk tiers in the Lean Delivery Playbook. Do not rerun a full
+  passing suite for an unchanged commit merely because responsibility changed.
+- Do not commit new plan, prompt, handoff, review, or fix-handoff files by
+  default. The pull request is the delivery record; create repository documents
+  only for durable specs, ADRs, runbooks, and project-wide standards.
 
 ## UI work
 
@@ -47,6 +63,6 @@ Before changing user-facing UI:
     policies, articles, and message bodies. Forms and application controls use
     normal components.
 
-Every user-facing handoff must include responsive browser evidence, keyboard
-and focus evidence, task-state coverage, console results, and an independent
-UX/UI verdict in addition to the repository's normal engineering gates.
+Every user-facing pull request must include the applicable risk-based browser,
+keyboard/focus, task-state, and console evidence. New journeys, global patterns,
+and UI foundation changes also require an independent UX/UI verdict.

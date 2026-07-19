@@ -8,6 +8,13 @@
       "when": 1784111508564,
       "tag": "0000_platform_event_outbox",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784207966900,
+      "tag": "0001_identity_authentication",
+      "breakpoints": true
     }
   ]
 }

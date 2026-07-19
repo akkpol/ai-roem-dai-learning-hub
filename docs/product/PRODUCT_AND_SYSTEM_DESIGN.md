@@ -266,6 +266,10 @@ Report submitted → case triaged → evidence preserved → scoped action appli
 9. ห้ามอ้างข้อความจาก legacy code เป็น requirement
 10. เมื่อ context ใหญ่เกินหนึ่ง subsystem ให้หยุดและแตก spec ใหม่
 11. Coding Session ทุกงานต้องเริ่มใน isolated Git worktree; `main` เป็นพื้นที่รวมงานที่ผ่าน review แล้วเท่านั้น
+12. งานที่สร้างหรือแก้ UI ต้องปฏิบัติตาม
+    `docs/project/UI_DELIVERY_STANDARD.md`; Prompt Packet ต้องระบุ user journey,
+    states, component/registry scope และ browser/accessibility evidence ก่อนเปิด
+    implementation session
 
 ## 15. Legacy disposition
 
@@ -285,7 +289,9 @@ Report submitted → case triaged → evidence preserved → scoped action appli
 - รองรับ loading, empty, error, retry และ concurrency ที่เกี่ยวข้อง
 - มี audit และ observability ตามระดับความเสี่ยง
 - ผ่าน domain, integration และ E2E tests ของ slice
-- ใช้งาน responsive และเข้าถึงได้ด้วย keyboard
+- ผ่าน `docs/project/UI_DELIVERY_STANDARD.md` เมื่อมี user-facing UI
+- ใช้งาน responsive และเข้าถึงได้ด้วย keyboard โดยพิสูจน์ task completion,
+  focus, validation feedback และสถานะ loading/empty/success/error ที่เกี่ยวข้อง
 - deploy ผ่าน Preview gate และ production smoke test
 - เอกสาร contract และ operations อัปเดตพร้อมโค้ด
 

@@ -9,6 +9,7 @@ Learning Hub คือแพลตฟอร์ม Marketplace การเรี
 - [Product and system design](docs/product/PRODUCT_AND_SYSTEM_DESIGN.md)
 - [Project status — สถานะปัจจุบันแบบสั้น](docs/project/PROJECT_STATUS.md)
 - [Master roadmap](docs/project/MASTER_ROADMAP.md)
+- [UI delivery standard](docs/project/UI_DELIVERY_STANDARD.md)
 - [Legacy inventory](docs/project/LEGACY_INVENTORY.md)
 
 ห้ามเริ่มฟีเจอร์ใหม่จากข้อความในโค้ด ข้อมูล demo หรือ commit เก่า หากข้อกำหนดไม่อยู่ในเอกสารต้นทาง ให้แก้และอนุมัติเอกสารก่อนพัฒนา

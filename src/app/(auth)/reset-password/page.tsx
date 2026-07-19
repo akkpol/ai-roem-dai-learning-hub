@@ -9,14 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyTitle,
-} from "@/components/ui/empty";
-
 export default async function ResetPasswordPage({
   searchParams,
 }: {
@@ -28,21 +20,19 @@ export default async function ResetPasswordPage({
   if (!token) {
     return (
       <Card>
-        <CardContent>
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>
-                <h1>ลิงก์ตั้งรหัสผ่านไม่ถูกต้อง</h1>
-              </EmptyTitle>
-              <EmptyDescription>
-                กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง
-              </EmptyDescription>
-            </EmptyHeader>
-            <EmptyContent>
-              <LinkButton href="/forgot-password">ขอลิงก์ใหม่</LinkButton>
-            </EmptyContent>
-          </Empty>
-        </CardContent>
+        <CardHeader>
+          <CardTitle>
+            <h1>ลิงก์ตั้งรหัสผ่านไม่ถูกต้อง</h1>
+          </CardTitle>
+          <CardDescription>
+            กรุณาขอลิงก์ตั้งรหัสผ่านใหม่อีกครั้ง
+          </CardDescription>
+        </CardHeader>
+        <CardFooter>
+          <LinkButton href="/forgot-password" className="w-full">
+            ขอลิงก์ใหม่
+          </LinkButton>
+        </CardFooter>
       </Card>
     );
   }

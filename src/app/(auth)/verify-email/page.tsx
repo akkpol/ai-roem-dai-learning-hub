@@ -1,33 +1,28 @@
 import { MailCheckIcon } from "lucide-react";
 
 import { LinkButton } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty";
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export default function VerifyEmailPage() {
   return (
     <Card>
-      <CardContent>
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <MailCheckIcon />
-            </EmptyMedia>
-            <EmptyTitle>
-              <h1>ยืนยันอีเมล</h1>
-            </EmptyTitle>
-            <EmptyDescription>
-              เปิดลิงก์จากอีเมลเพื่อยืนยันบัญชี จากนั้นเข้าสู่ระบบได้ทันที
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </CardContent>
+      <CardHeader>
+        <div className="bg-muted text-foreground flex size-10 items-center justify-center rounded-full">
+          <MailCheckIcon className="size-5" aria-hidden="true" />
+        </div>
+        <CardTitle>
+          <h1>ยืนยันอีเมล</h1>
+        </CardTitle>
+        <CardDescription>
+          เปิดลิงก์จากอีเมลเพื่อยืนยันบัญชี จากนั้นเข้าสู่ระบบได้ทันที
+        </CardDescription>
+      </CardHeader>
       <CardFooter className="flex-col gap-2">
         <LinkButton href="/sign-in" className="w-full">
           ไปหน้าเข้าสู่ระบบ

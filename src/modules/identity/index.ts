@@ -7,5 +7,6 @@ export {
 } from "./contracts";
 export { createIdentityService } from "./service";
 export type { IdentityRequestContext } from "./service";
-export { getIdentityHttpHandlers } from "./runtime";
+export { getAccountHttpHandlers, getIdentityHttpHandlers } from "./runtime";
+export { runIdentityRetention } from "./privacy";
 export * from "./schema";

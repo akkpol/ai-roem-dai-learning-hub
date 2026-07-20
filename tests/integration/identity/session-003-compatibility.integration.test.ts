@@ -117,6 +117,7 @@ async function latestEmail(
     )
     .orderBy(desc(identityEmailOutbox.createdAt), desc(identityEmailOutbox.id));
   if (!rows[0]) throw new Error("production proof email was not found");
+  if (!rows[0].encryptedPayload) throw new Error("production proof payload was cleared");
   return decryptAuthEmailIntent(rows[0].encryptedPayload, config.emailEncryptionKey);
 }
 

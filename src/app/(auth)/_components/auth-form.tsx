@@ -117,7 +117,6 @@ export function AuthForm({
       if (typeof value === "string") values[key] = value;
     }
     if (kind === "sign-up") values.ageAttested = values.ageAttested === "on";
-
     try {
       const response = await fetch(endpoints[kind], {
         method: "POST",
@@ -144,6 +143,9 @@ export function AuthForm({
             }
           : { tone: "error", message: fallbackErrorMessage },
       );
+      if (kind === "sign-in" && response.ok && result && typeof result === "object" && "requiresTwoFactor" in result && result.requiresTwoFactor === true) {
+        window.location.assign("/two-factor");
+      }
     } catch {
       setStatus({
         tone: "error",

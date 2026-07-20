@@ -1,5 +1,6 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { betterAuth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 
@@ -49,7 +50,11 @@ export function createTransactionAuth(
       },
       deleteUser: { enabled: false },
     },
-    session: { expiresIn: 7 * 24 * 60 * 60, updateAge: 24 * 60 * 60 },
+    session: {
+      expiresIn: 7 * 24 * 60 * 60,
+      updateAge: 24 * 60 * 60,
+      freshAge: 10 * 60,
+    },
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: false,
@@ -71,6 +76,12 @@ export function createTransactionAuth(
       onPasswordReset: async ({ user }) => callbacks.afterPasswordReset?.(user),
     },
     rateLimit: { enabled: true, storage: "database" },
+    plugins: [
+      twoFactor({
+        issuer: "Learning Hub",
+        twoFactorTable: "twoFactor",
+      }),
+    ],
     advanced: { database: { generateId: "uuid" } },
   });
 }

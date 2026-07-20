@@ -22,6 +22,7 @@ it("migrates the mapped Identity tables with UTC timestamps", async () => {
       "where table_schema = 'public' and table_name like 'identity_%' order by table_name",
   );
   expect(result.rows.map((row) => row.tableName)).toEqual([
+    "identity_account_deletion_requests",
     "identity_accounts",
     "identity_audit_events",
     "identity_auth_factors",
@@ -30,6 +31,7 @@ it("migrates the mapped Identity tables with UTC timestamps", async () => {
     "identity_profiles",
     "identity_rate_limits",
     "identity_sessions",
+    "identity_two_factors",
     "identity_verifications",
   ]);
 });

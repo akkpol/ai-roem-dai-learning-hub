@@ -23,6 +23,12 @@ function render(message: AuthEmailMessage): { subject: string; text: string } {
       text: `ยืนยันอีเมลของคุณเพื่อเริ่มใช้งาน Learning Hub: ${message.actionUrl}`,
     };
   }
+  if (message.template === "deletion_confirmation") {
+    return {
+      subject: "ยืนยันการลบบัญชี Learning Hub",
+      text: `ยืนยันคำขอลบบัญชีภายใน 30 นาที: ${message.actionUrl}`,
+    };
+  }
   return {
     subject: "ตั้งรหัสผ่าน Learning Hub ใหม่",
     text: `ตั้งรหัสผ่านใหม่ภายใน 30 นาที: ${message.actionUrl}`,

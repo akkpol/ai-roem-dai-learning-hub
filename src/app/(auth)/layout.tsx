@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 
-import "./auth-form.css";
-
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return <main className="auth-shell">{children}</main>;
+  return (
+    <main className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10 sm:px-6">
+      <div className="w-full max-w-md">{children}</div>
+    </main>
+  );
 }

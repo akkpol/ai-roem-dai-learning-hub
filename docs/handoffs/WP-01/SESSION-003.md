@@ -30,7 +30,8 @@ The handoff commit is the commit that adds this file. Its exact hash is reported
 - Schema and migration: `src/modules/identity/schema.ts`, `src/platform/database/schema.ts`, `drizzle/0001_identity_authentication.sql`, and Drizzle metadata.
 - Unit and acceptance coverage: `tests/identity/**`, `tests/acceptance/identity/**`, and the Identity Vitest configurations.
 - PostgreSQL compatibility evidence: `tests/integration/identity/**` and `tests/spikes/**`.
-- Execution trace and plan: `docs/prompts/SESSION-003-AUTHENTICATION-AND-AUTH-EMAIL.md` and `docs/superpowers/plans/2026-07-16-session-003-authentication-and-auth-email.md`.
+- Historical execution prompt and plan were intentionally removed from the live
+  tree after merge; Git history at `ca4d33f` preserves the audit trace.
 
 ## Dependency and public API evidence
 

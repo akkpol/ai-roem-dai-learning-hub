@@ -1,0 +1,36 @@
+.typeset-course {
+  --typeset-size: 1rem;
+  --typeset-leading: 1.85;
+  --typeset-flow: 1.5em;
+}
+
+.typeset-chat {
+  --typeset-size: 1em;
+  --typeset-leading: 1.7;
+  --typeset-flow: 1em;
+}
+
+.typeset-policy {
+  --typeset-size: 1rem;
+  --typeset-leading: 1.9;
+  --typeset-flow: 1.6em;
+}
+
+.typeset-course,
+.typeset-chat,
+.typeset-policy {
+  max-width: 72ch;
+  font-size: var(--typeset-size);
+  line-height: var(--typeset-leading);
+}
+
+.typeset-course > * + *,
+.typeset-chat > * + *,
+.typeset-policy > * + * {
+  margin-block-start: var(--typeset-flow);
+}
+
+.typeset-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}

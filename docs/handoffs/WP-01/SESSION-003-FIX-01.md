@@ -80,7 +80,7 @@ was performed.
 
 ## Changed files in implementation commit
 
-- `docs/superpowers/plans/2026-07-16-session-003-authentication-and-auth-email.md`
+- Historical SESSION-003 plan (preserved in Git history at `e145055`)
 - `src/app/(auth)/_components/auth-form.tsx`
 - `src/app/(auth)/reset-password/page.tsx`
 - `src/modules/identity/config.ts`

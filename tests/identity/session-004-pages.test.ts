@@ -25,8 +25,8 @@ describe("SESSION-004 Thai account pages", () => {
     expect(html).toContain("รหัสกู้คืน");
   });
 
-  it("renders export, policy history and deletion controls", () => {
-    const html = renderToStaticMarkup(PrivacyPage());
+  it("renders export, policy history and deletion controls", async () => {
+    const html = renderToStaticMarkup(await PrivacyPage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain("ประวัตินโยบาย");
     expect(html).toContain("ดาวน์โหลดข้อมูล Identity");
     expect(html).toContain("ขอลบบัญชี");
@@ -40,6 +40,19 @@ describe("SESSION-004 Thai account pages", () => {
     expect(html).toContain('name="recoveryCode"');
   });
 
+  it("renders a standalone unauthenticated deletion-cancellation entry", async () => {
+    const html = renderToStaticMarkup(
+      await PrivacyPage({
+        searchParams: Promise.resolve({ mode: "cancel-deletion" }),
+      }),
+    );
+    expect(html).toContain("ยกเลิกการลบบัญชี");
+    expect(html).toContain('name="email"');
+    expect(html).toContain('name="password"');
+    expect(html).not.toContain("ประวัตินโยบาย");
+    expect(html).not.toContain("ดาวน์โหลดข้อมูล Identity");
+  });
+
   it("composes account controls from the React Aria shadcn foundation", () => {
     const source = readFileSync(
       "src/app/(account)/account/_components/account-forms.tsx",
@@ -48,6 +61,9 @@ describe("SESSION-004 Thai account pages", () => {
     expect(source).toContain('from "@/components/ui/field"');
     expect(source).toContain('from "@/components/ui/card"');
     expect(source).toContain('from "@/components/ui/alert-dialog"');
+    expect(source).toContain("<FieldError");
+    expect(source).toContain("data-invalid=");
+    expect(source).toContain("aria-invalid=");
     expect(source).toContain('"password" | "verify" | "recovery"');
     expect(source).not.toMatch(/<button\b|<input\b|<select\b|<label\b/);
     expect(source).not.toMatch(/#[0-9a-f]{3,8}\b/i);

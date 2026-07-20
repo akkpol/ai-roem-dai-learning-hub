@@ -145,6 +145,25 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
   const replacementCodes = await security.regenerateRecoveryCodes(headers, newPassword);
   expect(replacementCodes.backupCodes).not.toEqual(enrollment.backupCodes);
 
+  const secondSignIn = await identity.signIn(
+    parseSignInCommand({ email, password: newPassword, callbackPath: "/" }),
+    new Headers(),
+  );
+  expect(secondSignIn.body.requiresTwoFactor).toBe(true);
+  const continuationHeaders = sessionHeaders(secondSignIn.headers);
+  const recoveryCode = replacementCodes.backupCodes[0]!;
+  const recoveryVerified = await security.verifySignInSecondFactor(
+    continuationHeaders,
+    { kind: "recovery", code: recoveryCode },
+  );
+  headers = sessionHeaders(recoveryVerified.headers);
+  await expect(
+    security.verifySignInSecondFactor(continuationHeaders, {
+      kind: "recovery",
+      code: recoveryCode,
+    }),
+  ).rejects.toThrow();
+
   const exported = await privacy.exportOwnIdentity(headers, {
     kind: "totp",
     code: currentTotp(enrollment.totpURI),
@@ -161,6 +180,20 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
   await expect(privacy.confirmDeletion(deletionIntent.token)).resolves.toMatchObject({
     status: true,
   });
+  const scheduledSignIn = await identity.signIn(
+    parseSignInCommand({ email, password: newPassword, callbackPath: "/" }),
+    new Headers(),
+  );
+  const unknownSignIn = await identity.signIn(
+    parseSignInCommand({
+      email: `unknown-${randomUUID()}@example.test`,
+      password: newPassword,
+      callbackPath: "/",
+    }),
+    new Headers(),
+  );
+  expect(scheduledSignIn).toMatchObject({ status: 401, body: unknownSignIn.body });
+  expect(scheduledSignIn.headers.get("set-cookie")).toBeNull();
   const cancelled = await privacy.cancelDeletion(new Headers(), {
     email,
     password: newPassword,

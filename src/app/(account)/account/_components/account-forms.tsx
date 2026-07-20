@@ -24,12 +24,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 
 type Tone = "success" | "error";
 type Status = { tone: Tone; message: string } | null;
+type FormFieldErrors = Record<string, string>;
+
+class AccountFormError extends Error {
+  constructor(message: string, readonly fieldErrors: FormFieldErrors) {
+    super(message);
+    this.name = "AccountFormError";
+  }
+}
 
 async function send(url: string, method: string, values: Record<string, string>) {
   const response = await fetch(url, {
@@ -42,7 +50,17 @@ async function send(url: string, method: string, values: Record<string, string>)
     result && typeof result === "object" && "message" in result && typeof result.message === "string"
       ? result.message
       : "กรุณาลองใหม่";
-  if (!response.ok) throw new Error(message);
+  if (!response.ok) {
+    const fieldErrors =
+      result && typeof result === "object" && "fieldErrors" in result && result.fieldErrors && typeof result.fieldErrors === "object"
+        ? Object.fromEntries(
+            Object.entries(result.fieldErrors).filter(
+              (entry): entry is [string, string] => typeof entry[1] === "string",
+            ),
+          )
+        : {};
+    throw new AccountFormError(message, fieldErrors);
+  }
   return result as Record<string, unknown>;
 }
 
@@ -77,6 +95,7 @@ export function ProfileForm() {
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const [profile, setProfile] = useState({ displayName: "", locale: "th-TH", timeZone: "Asia/Bangkok" });
+  const [fieldErrors, setFieldErrors] = useState<FormFieldErrors>({});
   useEffect(() => {
     let active = true;
     fetch("/api/account/profile")
@@ -89,10 +108,12 @@ export function ProfileForm() {
     event.preventDefault();
     setBusy(true);
     setStatus(null);
+    setFieldErrors({});
     try {
       await send("/api/account/profile", "PATCH", valuesOf(event.currentTarget));
       setStatus({ tone: "success", message: "บันทึกโปรไฟล์แล้ว" });
     } catch (error) {
+      if (error instanceof AccountFormError) setFieldErrors(error.fieldErrors);
       setStatus({ tone: "error", message: error instanceof Error ? error.message : "กรุณาลองใหม่" });
     } finally { setBusy(false); }
   }
@@ -102,9 +123,9 @@ export function ProfileForm() {
       <CardContent>
         <form onSubmit={submit} aria-busy={busy}>
           <FieldGroup>
-            <Field><FieldLabel htmlFor="displayName">ชื่อที่แสดง</FieldLabel><Input id="displayName" name="displayName" required maxLength={120} autoComplete="name" value={profile.displayName} onChange={(event) => setProfile((current) => ({ ...current, displayName: event.target.value }))} /></Field>
-            <Field><FieldLabel htmlFor="locale">ภาษา</FieldLabel><Input id="locale" name="locale" required value={profile.locale} onChange={(event) => setProfile((current) => ({ ...current, locale: event.target.value }))} /><FieldDescription>ใช้รหัสภาษา เช่น th-TH หรือ en-US</FieldDescription></Field>
-            <Field><FieldLabel htmlFor="timeZone">เขตเวลา</FieldLabel><Input id="timeZone" name="timeZone" required value={profile.timeZone} onChange={(event) => setProfile((current) => ({ ...current, timeZone: event.target.value }))} /><FieldDescription>ใช้ชื่อเขตเวลา IANA เช่น Asia/Bangkok</FieldDescription></Field>
+            <Field data-invalid={Boolean(fieldErrors.displayName)}><FieldLabel htmlFor="displayName">ชื่อที่แสดง</FieldLabel><Input id="displayName" name="displayName" required maxLength={120} autoComplete="name" value={profile.displayName} aria-invalid={Boolean(fieldErrors.displayName)} onChange={(event) => { setProfile((current) => ({ ...current, displayName: event.target.value })); setFieldErrors((current) => ({ ...current, displayName: "" })); }} /><FieldError>{fieldErrors.displayName}</FieldError></Field>
+            <Field data-invalid={Boolean(fieldErrors.locale)}><FieldLabel htmlFor="locale">ภาษา</FieldLabel><Input id="locale" name="locale" required value={profile.locale} aria-invalid={Boolean(fieldErrors.locale)} onChange={(event) => { setProfile((current) => ({ ...current, locale: event.target.value })); setFieldErrors((current) => ({ ...current, locale: "" })); }} /><FieldDescription>ใช้รหัสภาษา เช่น th-TH หรือ en-US</FieldDescription><FieldError>{fieldErrors.locale}</FieldError></Field>
+            <Field data-invalid={Boolean(fieldErrors.timeZone)}><FieldLabel htmlFor="timeZone">เขตเวลา</FieldLabel><Input id="timeZone" name="timeZone" required value={profile.timeZone} aria-invalid={Boolean(fieldErrors.timeZone)} onChange={(event) => { setProfile((current) => ({ ...current, timeZone: event.target.value })); setFieldErrors((current) => ({ ...current, timeZone: "" })); }} /><FieldDescription>ใช้ชื่อเขตเวลา IANA เช่น Asia/Bangkok</FieldDescription><FieldError>{fieldErrors.timeZone}</FieldError></Field>
             <SubmitButton busy={busy} idle="บันทึกโปรไฟล์" pending="กำลังบันทึก…" />
             <StatusAlert status={status} />
           </FieldGroup>
@@ -217,12 +238,26 @@ export function SecurityForms() {
 
 type Policy = { type: string; version: string; acceptedAt: string };
 
+export function DeletionCancellationForm() {
+  const [status, setStatus] = useState<Status>(null);
+  async function cancel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus(null);
+    try {
+      await send("/api/account/privacy/deletion/cancel", "POST", valuesOf(event.currentTarget));
+      setStatus({ tone: "success", message: "ยกเลิกการลบบัญชีแล้ว" });
+    } catch {
+      setStatus({ tone: "error", message: "ยกเลิกไม่ได้ กรุณาตรวจสอบข้อมูล" });
+    }
+  }
+  return <Card><CardHeader><CardTitle>ยกเลิกการลบบัญชี</CardTitle><CardDescription>ใช้ได้เฉพาะในช่วงรอ และจะสร้างเซสชันใหม่หลังยืนยันสำเร็จ</CardDescription></CardHeader><CardContent><form onSubmit={cancel}><FieldGroup><Field><FieldLabel htmlFor="cancelEmail">อีเมล</FieldLabel><Input id="cancelEmail" name="email" type="email" autoComplete="email" required /></Field><Field><FieldLabel htmlFor="cancelPassword">รหัสผ่าน</FieldLabel><Input id="cancelPassword" name="password" type="password" autoComplete="current-password" required /></Field><Field><FieldLabel htmlFor="cancelTotp">รหัส TOTP</FieldLabel><Input id="cancelTotp" name="totpCode" /></Field><Field><FieldLabel htmlFor="cancelRecovery">หรือรหัสกู้คืน</FieldLabel><Input id="cancelRecovery" name="recoveryCode" /></Field><Button type="submit" variant="outline">ยกเลิกและกลับเข้าใช้งาน</Button><StatusAlert status={status} /></FieldGroup></form></CardContent></Card>;
+}
+
 export function PrivacyForms() {
   const [policies, setPolicies] = useState<Policy[] | null>(null);
   const [policyStatus, setPolicyStatus] = useState<Status>(null);
   const [exportStatus, setExportStatus] = useState<Status>(null);
   const [deletionStatus, setDeletionStatus] = useState<Status>(null);
-  const [cancellationStatus, setCancellationStatus] = useState<Status>(null);
   const deletionForm = useRef<HTMLFormElement>(null);
   useEffect(() => { fetch("/api/account/policies").then((response) => response.ok ? response.json() : Promise.reject()).then(setPolicies).catch(() => setPolicyStatus({ tone: "error", message: "โหลดประวัตินโยบายไม่ได้" })); }, []);
   async function download(event: FormEvent<HTMLFormElement>) {
@@ -236,9 +271,8 @@ export function PrivacyForms() {
     try { await send("/api/account/privacy/deletion/request", "POST", valuesOf(deletionForm.current)); setDeletionStatus({ tone: "success", message: "ส่งอีเมลยืนยันแล้ว การเปิดอีเมลยังไม่ลบบัญชีจนกว่าคุณจะกดยืนยัน" }); }
     catch { setDeletionStatus({ tone: "error", message: "ส่งคำขอลบบัญชีไม่ได้" }); }
   }
-  async function cancel(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setCancellationStatus(null); try { await send("/api/account/privacy/deletion/cancel", "POST", valuesOf(event.currentTarget)); setCancellationStatus({ tone: "success", message: "ยกเลิกการลบบัญชีแล้ว" }); } catch { setCancellationStatus({ tone: "error", message: "ยกเลิกไม่ได้ กรุณาตรวจสอบข้อมูล" }); } }
   return <div className="grid gap-4 lg:grid-cols-2"><Card><CardHeader><CardTitle>ประวัตินโยบาย</CardTitle><CardDescription>เวอร์ชันข้อกำหนดที่คุณเคยยอมรับ</CardDescription></CardHeader><CardContent>{policies === null && !policyStatus ? <p className="flex items-center gap-2 text-muted-foreground"><Spinner />กำลังโหลด…</p> : null}{policies?.length === 0 ? <Empty><EmptyHeader><EmptyTitle>ยังไม่มีประวัติเพิ่มเติม</EmptyTitle><EmptyDescription>ประวัติจะแสดงเมื่อคุณยอมรับนโยบาย</EmptyDescription></EmptyHeader></Empty> : null}<ul className="flex flex-col gap-2">{policies?.map((policy) => <li className="rounded-lg border border-border p-3" key={`${policy.type}-${policy.version}`}>{policy.type} · {policy.version}<p className="text-sm text-muted-foreground">{policy.acceptedAt}</p></li>)}</ul><StatusAlert status={policyStatus} /></CardContent></Card>
     <Card><CardHeader><CardTitle>ดาวน์โหลดข้อมูล Identity</CardTitle><CardDescription>ไฟล์ JSON ไม่รวมรหัสผ่าน token หรือข้อมูลของผู้อื่น</CardDescription></CardHeader><CardContent><form onSubmit={download}><FieldGroup><Field><FieldLabel htmlFor="exportTotp">รหัส TOTP เมื่อเปิด 2FA</FieldLabel><Input id="exportTotp" name="totpCode" inputMode="numeric" /></Field><Field><FieldLabel htmlFor="exportRecovery">หรือรหัสกู้คืน</FieldLabel><Input id="exportRecovery" name="recoveryCode" /></Field><Button type="submit">ดาวน์โหลด JSON</Button><StatusAlert status={exportStatus} /></FieldGroup></form></CardContent></Card>
     <Card><CardHeader><CardTitle>ขอลบบัญชี</CardTitle><CardDescription>หลังยืนยันทางอีเมล ระบบจะออกจากทุกอุปกรณ์และเริ่มช่วงรอ 7 วัน</CardDescription></CardHeader><CardContent><form ref={deletionForm}><FieldGroup><Field><FieldLabel htmlFor="deletionPassword">รหัสผ่าน</FieldLabel><Input id="deletionPassword" name="password" type="password" autoComplete="current-password" required /></Field><Field><FieldLabel htmlFor="deletionTotp">รหัส TOTP</FieldLabel><Input id="deletionTotp" name="totpCode" inputMode="numeric" /></Field><Field><FieldLabel htmlFor="deletionRecovery">หรือรหัสกู้คืน</FieldLabel><Input id="deletionRecovery" name="recoveryCode" /></Field><AlertDialogTrigger><Button type="button" variant="destructive">ตรวจสอบก่อนส่งคำขอ</Button><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>ส่งคำขอลบบัญชี?</AlertDialogTitle><AlertDialogDescription>ระบบจะส่งอีเมลยืนยัน การกดยืนยันในอีเมลจะออกจากทุกอุปกรณ์และเริ่มช่วงรอ 7 วัน</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>กลับไปตรวจสอบ</AlertDialogCancel><AlertDialogAction variant="destructive" onPress={requestDeletion}>ส่งอีเมลยืนยัน</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialogTrigger><StatusAlert status={deletionStatus} /></FieldGroup></form></CardContent></Card>
-    <Card><CardHeader><CardTitle>ยกเลิกการลบบัญชี</CardTitle><CardDescription>ใช้ได้เฉพาะในช่วงรอ และจะสร้างเซสชันใหม่หลังยืนยันสำเร็จ</CardDescription></CardHeader><CardContent><form onSubmit={cancel}><FieldGroup><Field><FieldLabel htmlFor="cancelEmail">อีเมล</FieldLabel><Input id="cancelEmail" name="email" type="email" autoComplete="email" required /></Field><Field><FieldLabel htmlFor="cancelPassword">รหัสผ่าน</FieldLabel><Input id="cancelPassword" name="password" type="password" autoComplete="current-password" required /></Field><Field><FieldLabel htmlFor="cancelTotp">รหัส TOTP</FieldLabel><Input id="cancelTotp" name="totpCode" /></Field><Field><FieldLabel htmlFor="cancelRecovery">หรือรหัสกู้คืน</FieldLabel><Input id="cancelRecovery" name="recoveryCode" /></Field><Button type="submit" variant="outline">ยกเลิกและกลับเข้าใช้งาน</Button><StatusAlert status={cancellationStatus} /></FieldGroup></form></CardContent></Card></div>;
+    <DeletionCancellationForm /></div>;
 }

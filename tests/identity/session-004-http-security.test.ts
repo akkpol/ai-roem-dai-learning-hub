@@ -83,6 +83,36 @@ describe("SESSION-004 HTTP and session security negatives", () => {
     expect(confirmDeletion).not.toHaveBeenCalled();
   });
 
+  it("returns safe structured 400 field errors without invoking profile mutation", async () => {
+    const updateOwnProfile = vi.fn();
+    const handlers = createAccountHttpHandlers({
+      account: { updateOwnProfile } as never,
+      privacy: {} as never,
+      config,
+    });
+    const response = await handlers.updateProfile(
+      new Request("https://learning.example.test/api/account/profile", {
+        method: "PATCH",
+        headers: {
+          host: "learning.example.test",
+          origin: "https://learning.example.test",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ displayName: "", locale: "xx", timeZone: "Mars/Olympus" }),
+      }),
+    );
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      status: false,
+      fieldErrors: {
+        displayName: expect.any(String),
+        locale: expect.any(String),
+        timeZone: expect.any(String),
+      },
+    });
+    expect(updateOwnProfile).not.toHaveBeenCalled();
+  });
+
   it("fails closed for revoked and inactive sessions", async () => {
     authApi.getSession.mockResolvedValueOnce(null);
     const revoked = createAccountSecurityService(databaseWithSelections(), config);
@@ -134,18 +164,13 @@ describe("SESSION-004 HTTP and session security negatives", () => {
     expect(authApi.revokeOtherSessions).not.toHaveBeenCalled();
   });
 
-  it("consumes recovery codes once and always disables trusted-device bypass", async () => {
-    authApi.verifyBackupCode
-      .mockResolvedValueOnce({ status: true })
-      .mockRejectedValueOnce(new Error("backup code invalid"));
+  it("forwards recovery verification with consuming and trusted-device-safe flags", async () => {
+    authApi.verifyBackupCode.mockResolvedValueOnce({ status: true });
     const auth = { api: authApi } as never;
     const headers = new Headers();
     await expect(
       verifySecondFactor(auth, headers, { kind: "recovery", code: "one-time" }),
     ).resolves.toBeUndefined();
-    await expect(
-      verifySecondFactor(auth, headers, { kind: "recovery", code: "one-time" }),
-    ).rejects.toThrow("backup code invalid");
     expect(authApi.verifyBackupCode).toHaveBeenCalledWith({
       body: { code: "one-time", disableSession: true, trustDevice: false },
       headers,

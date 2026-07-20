@@ -479,7 +479,7 @@ export async function runIdentityRetention(
       .where(
         and(
           eq(identityAccounts.status, "closed"),
-          lte(identityAuditEvents.occurredAt, cutoffs.identityHistory),
+          lte(identityAccounts.closedAt, cutoffs.identityHistory),
         ),
       )
       .limit(options.batchLimit);

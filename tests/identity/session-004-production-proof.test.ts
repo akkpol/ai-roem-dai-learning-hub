@@ -68,6 +68,8 @@ describe("SESSION-004 production topology", () => {
     expect(privacy).toContain("staleAuditEvents");
     expect(privacy).toContain("staleEmailMetadata");
     expect(privacy).toContain("cutoffs.delivery");
+    expect(privacy).toContain("lte(identityAccounts.closedAt, cutoffs.identityHistory)");
+    expect(privacy).not.toContain("lte(identityAuditEvents.occurredAt, cutoffs.identityHistory)");
     expect(privacy).toContain(".limit(options.batchLimit)");
   });
 });

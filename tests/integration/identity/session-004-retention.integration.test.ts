@@ -29,6 +29,7 @@ beforeAll(() => {
 
 it("bounds history work and deletes terminal email metadata after 90 days", async () => {
   const accountId = randomUUID();
+  const recentlyClosedAccountId = randomUUID();
   const now = new Date("2026-07-19T12:00:00.000Z");
   await connection.db.insert(identityAccounts).values({
     id: accountId,
@@ -38,6 +39,15 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
     status: "closed",
     ageAttestedAt: new Date("2023-01-01T00:00:00.000Z"),
     closedAt: new Date("2023-01-02T00:00:00.000Z"),
+  });
+  await connection.db.insert(identityAccounts).values({
+    id: recentlyClosedAccountId,
+    name: null,
+    email: null,
+    emailVerified: true,
+    status: "closed",
+    ageAttestedAt: new Date("2023-01-01T00:00:00.000Z"),
+    closedAt: now,
   });
   await connection.db.insert(identityPolicyAcceptances).values(
     ["terms-a", "terms-b", "terms-c"].map((policyVersion) => ({
@@ -55,6 +65,12 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
       occurredAt: new Date("2023-01-01T00:00:00.000Z"),
     })),
   );
+  await connection.db.insert(identityAuditEvents).values({
+    accountId: recentlyClosedAccountId,
+    action: "old-event-on-recent-closure",
+    payload: { retained: "must-remain-for-two-years-after-closure" },
+    occurredAt: new Date("2023-01-01T00:00:00.000Z"),
+  });
   await connection.db.insert(identityEmailOutbox).values(
     ["sent", "dead_letter", "expired"].map((state) => ({
       accountId,
@@ -87,6 +103,12 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
     .where(eq(identityAuditEvents.accountId, accountId));
   expect(audits.filter((event) => event.payload.retention === "anonymized")).toHaveLength(2);
   expect(audits.filter((event) => event.payload.retained === "sensitive-context")).toHaveLength(1);
+  await expect(
+    connection.db
+      .select({ payload: identityAuditEvents.payload })
+      .from(identityAuditEvents)
+      .where(eq(identityAuditEvents.accountId, recentlyClosedAccountId)),
+  ).resolves.toEqual([{ payload: { retained: "must-remain-for-two-years-after-closure" } }]);
 });
 
 afterAll(async () => connection.close());

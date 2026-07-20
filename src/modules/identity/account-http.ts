@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  AccountInputError,
   parsePasswordChange,
   parseProfileUpdate,
   parseSecondFactorProof,
@@ -12,15 +13,32 @@ import type { createIdentityPrivacyService } from "./privacy";
 type AccountService = ReturnType<typeof createAccountSecurityService>;
 type PrivacyService = ReturnType<typeof createIdentityPrivacyService>;
 
-function jsonError(status: number, message: string) {
-  return Response.json({ status: false, message }, { status });
+function jsonError(status: number, message: string, fieldErrors?: Record<string, string>) {
+  return Response.json({ status: false, message, ...(fieldErrors ? { fieldErrors } : {}) }, { status });
+}
+
+function invalidInputResponse(error: unknown) {
+  if (error instanceof AccountInputError) {
+    return jsonError(400, "ข้อมูลที่ส่งมาไม่ถูกต้อง", error.fieldErrors);
+  }
+  if (error instanceof z.ZodError) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of error.issues) {
+      fieldErrors[String(issue.path[0] ?? "_form")] ??= "ข้อมูลช่องนี้ไม่ถูกต้อง";
+    }
+    return jsonError(400, "ข้อมูลที่ส่งมาไม่ถูกต้อง", fieldErrors);
+  }
 }
 
 async function readJson(request: Request): Promise<unknown> {
   if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) {
-    throw new Error("invalid content type");
+    throw new AccountInputError("invalid content type", { _form: "กรุณาส่งข้อมูล JSON" });
   }
-  return request.json();
+  try {
+    return await request.json();
+  } catch {
+    throw new AccountInputError("invalid JSON", { _form: "ข้อมูล JSON ไม่ถูกต้อง" });
+  }
 }
 
 function streamJson(value: unknown): Response {
@@ -106,8 +124,8 @@ export function createAccountHttpHandlers(dependencies: {
   const guarded = async (work: () => Promise<Response>) => {
     try {
       return await work();
-    } catch {
-      return jsonError(401, "กรุณาเข้าสู่ระบบหรือยืนยันตัวตนใหม่");
+    } catch (error) {
+      return invalidInputResponse(error) ?? jsonError(401, "กรุณาเข้าสู่ระบบหรือยืนยันตัวตนใหม่");
     }
   };
 
@@ -194,7 +212,10 @@ export function createAccountHttpHandlers(dependencies: {
           .strict()
           .parse(await readJson(request));
         const proof = optionalSecondFactorProof(input);
-        if (!proof) return jsonError(400, "กรุณากรอกรหัสยืนยันตัวตน");
+        if (!proof) return jsonError(400, "กรุณากรอกรหัสยืนยันตัวตน", {
+          totpCode: "กรุณากรอกรหัส TOTP หรือรหัสกู้คืน",
+          recoveryCode: "กรุณากรอกรหัส TOTP หรือรหัสกู้คืน",
+        });
         return Response.json(
           await dependencies.account.disableTwoFactor(
             request.headers,

@@ -104,7 +104,7 @@ jobs:
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/learning-hub.log 2>&1 &
           server_pid=$!
-          trap 'kill $server_pid' EXIT
+          trap 'kill $server_pid; wait $server_pid || true' EXIT
           app_url=http://127.0.0.1:3000
           for attempt in {1..30}; do
             if curl --silent "$app_url/api/health/live" > /dev/null; then break; fi
@@ -117,12 +117,12 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
-          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3001
         run: |
-          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/learning-hub-provider.log 2>&1 &
+          npm run start -- --hostname 127.0.0.1 --port 3001 > /tmp/learning-hub-provider.log 2>&1 &
           server_pid=$!
-          trap 'kill $server_pid' EXIT
-          app_url=http://127.0.0.1:3000
+          trap 'kill $server_pid; wait $server_pid || true' EXIT
+          app_url=http://127.0.0.1:3001
           for attempt in {1..30}; do
             if curl --silent "$app_url/api/health/live" > /dev/null; then break; fi
             sleep 1

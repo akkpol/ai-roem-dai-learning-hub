@@ -20,14 +20,16 @@ export const identityAccounts = pgTable(
   "identity_accounts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    name: text("name").notNull(),
-    email: text("email").notNull(),
+    name: text("name"),
+    email: text("email"),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
     createdAt: utcTimestamp("created_at").defaultNow().notNull(),
     updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
     status: text("status").default("pending_verification").notNull(),
     ageAttestedAt: utcTimestamp("age_attested_at").notNull(),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    closedAt: utcTimestamp("closed_at"),
   },
   (table) => [
     uniqueIndex("identity_accounts_email_unique").on(table.email),
@@ -35,6 +37,10 @@ export const identityAccounts = pgTable(
     check(
       "identity_accounts_status_check",
       sql`${table.status} in ('pending_verification','active','suspended','deletion_scheduled','closed')`,
+    ),
+    check(
+      "identity_accounts_closed_pii_check",
+      sql`(${table.status} = 'closed' and ${table.email} is null and ${table.name} is null and ${table.closedAt} is not null) or (${table.status} <> 'closed' and ${table.email} is not null and ${table.name} is not null and ${table.closedAt} is null)`,
     ),
   ],
 );
@@ -107,6 +113,30 @@ export const identityRateLimits = pgTable("identity_rate_limits", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+export const identityTwoFactors = pgTable(
+  "identity_two_factors",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => identityAccounts.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").default(false).notNull(),
+    failedVerificationCount: integer("failed_verification_count")
+      .default(0)
+      .notNull(),
+    lockedUntil: utcTimestamp("locked_until"),
+  },
+  (table) => [
+    uniqueIndex("identity_two_factors_user_id_unique").on(table.userId),
+    check(
+      "identity_two_factors_failed_count_check",
+      sql`${table.failedVerificationCount} >= 0`,
+    ),
+  ],
+);
+
 export const identityProfiles = pgTable("identity_profiles", {
   accountId: uuid("account_id")
     .primaryKey()
@@ -163,7 +193,7 @@ export const identityEmailOutbox = pgTable(
       .references(() => identityAccounts.id, { onDelete: "cascade" }),
     template: text("template").notNull(),
     recipientHash: text("recipient_hash").notNull(),
-    encryptedPayload: text("encrypted_payload").notNull(),
+    encryptedPayload: text("encrypted_payload"),
     keyVersion: text("key_version").notNull(),
     idempotencyKey: uuid("idempotency_key").defaultRandom().notNull().unique(),
     state: text("state").default("pending").notNull(),
@@ -182,10 +212,45 @@ export const identityEmailOutbox = pgTable(
   ],
 );
 
+export const identityAccountDeletionRequests = pgTable(
+  "identity_account_deletion_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => identityAccounts.id, { onDelete: "restrict" }),
+    state: text("state").default("requested").notNull(),
+    confirmationTokenHash: text("confirmation_token_hash"),
+    confirmationExpiresAt: utcTimestamp("confirmation_expires_at"),
+    requestedAt: utcTimestamp("requested_at").defaultNow().notNull(),
+    confirmedAt: utcTimestamp("confirmed_at"),
+    scheduledFor: utcTimestamp("scheduled_for"),
+    cancelledAt: utcTimestamp("cancelled_at"),
+    completedAt: utcTimestamp("completed_at"),
+    updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("identity_deletion_requests_account_idx").on(table.accountId),
+    index("identity_deletion_requests_due_idx").on(table.state, table.scheduledFor),
+    uniqueIndex("identity_deletion_requests_active_unique")
+      .on(table.accountId)
+      .where(sql`${table.state} in ('requested','confirmed','scheduled')`),
+    check(
+      "identity_deletion_requests_state_check",
+      sql`${table.state} in ('requested','confirmed','scheduled','cancelled','completed','expired')`,
+    ),
+    check(
+      "identity_deletion_requests_timeline_check",
+      sql`(${table.state} = 'requested' and ${table.confirmationTokenHash} is not null and ${table.confirmationExpiresAt} is not null) or (${table.state} = 'scheduled' and ${table.confirmedAt} is not null and ${table.scheduledFor} is not null and ${table.confirmationTokenHash} is null) or (${table.state} = 'cancelled' and ${table.cancelledAt} is not null) or (${table.state} = 'completed' and ${table.completedAt} is not null) or ${table.state} in ('confirmed','expired')`,
+    ),
+  ],
+);
+
 export const betterAuthSchema = {
   user: identityAccounts,
   account: identityAuthFactors,
   session: identitySessions,
   verification: identityVerifications,
   rateLimit: identityRateLimits,
+  twoFactor: identityTwoFactors,
 };

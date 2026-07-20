@@ -26,6 +26,9 @@ export default function SignInPage() {
         <LinkButton href="/forgot-password" variant="link">
           ลืมรหัสผ่าน
         </LinkButton>
+        <LinkButton href="/account/privacy?mode=cancel-deletion" variant="link">
+          ยกเลิกคำขอลบบัญชี
+        </LinkButton>
         <LinkButton href="/sign-up" variant="outline" className="w-full">
           สร้างบัญชีใหม่
         </LinkButton>

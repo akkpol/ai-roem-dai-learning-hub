@@ -30,6 +30,13 @@ describe("Public authentication pages", () => {
     expect(signup).not.toContain("อุปกรณ์ที่เข้าสู่ระบบ");
   });
 
+  it("offers the same safe deletion-cancellation entry after every sign-in failure", () => {
+    const signIn = render(SignInPage);
+    expect(signIn).toContain("/account/privacy?mode=cancel-deletion");
+    expect(signIn).toContain("ยกเลิกคำขอลบบัญชี");
+    expect(signIn).not.toContain("บัญชีของคุณอยู่ระหว่างลบ");
+  });
+
   it("initializes reset from the emailed query token without a manual token field", async () => {
     const reset = renderToStaticMarkup(
       await ResetPasswordPage({

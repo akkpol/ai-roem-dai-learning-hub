@@ -6,7 +6,7 @@ import {
 } from "node:crypto";
 
 export type AuthEmailIntent = {
-  template: "verify_email" | "reset_password";
+  template: "verify_email" | "reset_password" | "deletion_confirmation";
   email: string;
   token: string;
   url: string;

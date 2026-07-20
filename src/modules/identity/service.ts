@@ -21,7 +21,11 @@ export type IdentityRequestContext = {
   userAgent?: string;
 };
 
-export type GenericAuthResult = { status: true; message: string };
+export type GenericAuthResult = {
+  status: true;
+  message: string;
+  requiresTwoFactor?: boolean;
+};
 
 export type IdentityServiceTestHooks = {
   afterSignupWrites?(): Promise<void>;
@@ -221,7 +225,16 @@ export function createIdentityService(
             headers,
             returnHeaders: true,
           });
-          return { status: 200, headers: result.headers, body: genericResult() };
+          return {
+            status: 200,
+            headers: result.headers,
+            body: {
+              ...genericResult(),
+              ...("twoFactorRedirect" in result.response && result.response.twoFactorRedirect
+                ? { requiresTwoFactor: true }
+                : {}),
+            },
+          };
         });
       } catch {
         return { status: 401, headers: new Headers(), body: genericResult() };

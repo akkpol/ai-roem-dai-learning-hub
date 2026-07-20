@@ -23,6 +23,7 @@ describe("Identity schema", () => {
       session: "identity_sessions",
       verification: "identity_verifications",
       rateLimit: "identity_rate_limits",
+      twoFactor: "identity_two_factors",
     });
   });
 

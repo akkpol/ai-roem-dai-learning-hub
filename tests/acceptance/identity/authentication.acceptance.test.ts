@@ -74,8 +74,10 @@ describe("SESSION-003 authentication acceptance", () => {
       .from(identityEmailOutbox)
       .where(eq(identityEmailOutbox.accountId, account[0]!.id))
       .orderBy(desc(identityEmailOutbox.createdAt));
+    const verificationPayload = verificationMessages[0]?.encryptedPayload;
+    if (!verificationPayload) throw new Error("verification payload was not found");
     const verification = decryptAuthEmailIntent(
-      verificationMessages[0]!.encryptedPayload,
+      verificationPayload,
       config.emailEncryptionKey,
     );
     await expect(service.verifyEmail(verification.token)).resolves.toMatchObject({
@@ -107,8 +109,10 @@ describe("SESSION-003 authentication acceptance", () => {
       .from(identityEmailOutbox)
       .where(eq(identityEmailOutbox.accountId, account[0]!.id))
       .orderBy(desc(identityEmailOutbox.createdAt));
+    const resetPayload = resetMessages[0]?.encryptedPayload;
+    if (!resetPayload) throw new Error("reset payload was not found");
     const reset = decryptAuthEmailIntent(
-      resetMessages[0]!.encryptedPayload,
+      resetPayload,
       config.emailEncryptionKey,
     );
     const emailedToken = new URL(reset.url).searchParams.get("token");

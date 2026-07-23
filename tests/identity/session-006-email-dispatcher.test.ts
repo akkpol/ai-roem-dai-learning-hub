@@ -22,6 +22,7 @@ function repository(
   overrides: Partial<AuthEmailOutboxRepository> = {},
 ): AuthEmailOutboxRepository {
   return {
+    expireStale: vi.fn(async () => 0),
     claimBatch: vi.fn(async () => [claimed]),
     markSent: vi.fn(async () => undefined),
     markRetry: vi.fn(async () => undefined),
@@ -134,6 +135,39 @@ describe("SESSION-006 authentication email dispatcher", () => {
 
     expect(repo.markExpired).toHaveBeenCalledOnce();
     expect(decrypt).not.toHaveBeenCalled();
+    expect(sender.send).not.toHaveBeenCalled();
+  });
+
+  it("purges already-expired queued work before attempting a claim", async () => {
+    const repo = repository({
+      expireStale: vi.fn(async () => 2),
+      claimBatch: vi.fn(async () => []),
+    });
+    const sender: AuthEmailSender = {
+      send: vi.fn(async () => ({ providerMessageId: "never" })),
+    };
+    const telemetry = vi.fn();
+    const dispatcher = createAuthEmailDispatcher({
+      repository: repo,
+      sender,
+      decrypt: vi.fn(),
+      now: () => now,
+      workerId: "worker-a",
+      telemetry,
+    });
+
+    await expect(dispatcher.runBatch(10)).resolves.toEqual({
+      claimed: 0,
+      sent: 0,
+      retried: 0,
+      deadLettered: 0,
+      expired: 2,
+    });
+    expect(repo.expireStale).toHaveBeenCalledWith({ now });
+    expect(telemetry).toHaveBeenCalledWith(
+      "identity.email_outbox.expired",
+      { count: 2 },
+    );
     expect(sender.send).not.toHaveBeenCalled();
   });
 });

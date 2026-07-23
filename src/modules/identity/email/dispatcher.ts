@@ -16,6 +16,7 @@ export type ClaimedAuthEmail = {
 };
 
 export type AuthEmailOutboxRepository = {
+  expireStale(input: { now: Date }): Promise<number>;
   claimBatch(input: {
     limit: number;
     now: Date;
@@ -115,6 +116,9 @@ export function createAuthEmailDispatcher(input: {
         throw new Error("email dispatch batch limit is invalid");
       }
       const startedAt = now();
+      const expiredBeforeClaim = await input.repository.expireStale({
+        now: startedAt,
+      });
       const claimed = await input.repository.claimBatch({
         limit,
         now: startedAt,
@@ -125,8 +129,13 @@ export function createAuthEmailDispatcher(input: {
         sent: 0,
         retried: 0,
         deadLettered: 0,
-        expired: 0,
+        expired: expiredBeforeClaim,
       };
+      if (expiredBeforeClaim > 0) {
+        input.telemetry?.("identity.email_outbox.expired", {
+          count: expiredBeforeClaim,
+        });
+      }
       for (const item of claimed) {
         const completedAt = now();
         if (item.expiresAt <= completedAt) {
@@ -215,6 +224,29 @@ export function createPostgresAuthEmailOutboxRepository(
   leaseMs = 5 * 60_000,
 ): AuthEmailOutboxRepository {
   return {
+    expireStale: async ({ now }) => {
+      const rows = await database
+        .update(identityEmailOutbox)
+        .set({
+          state: "expired",
+          encryptedPayload: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          lastErrorCode: "token_expired",
+        })
+        .where(sql`
+          ${identityEmailOutbox.expiresAt} <= ${now}::timestamptz
+          and (
+            ${identityEmailOutbox.state} in ('pending', 'retry_wait')
+            or (
+              ${identityEmailOutbox.state} = 'sending'
+              and ${identityEmailOutbox.leaseExpiresAt} <= ${now}::timestamptz
+            )
+          )
+        `)
+        .returning({ id: identityEmailOutbox.id });
+      return rows.length;
+    },
     claimBatch: async ({ limit, now }) =>
       database.transaction(async (transaction) => {
         const result = await transaction.execute<ClaimedAuthEmail>(sql`

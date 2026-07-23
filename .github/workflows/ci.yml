@@ -117,7 +117,19 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
+          IDENTITY_EMAIL_WORKER_DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
+          IDENTITY_MAINTENANCE_DATABASE_URL: ${{ secrets.NEON_SESSION_002_MIGRATION_DATABASE_URL }}
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3001
+          AUTH_SECRET: ci-readiness-only-secret-value-000000
+          AUTH_BASE_URL: http://127.0.0.1:3001/api/auth
+          AUTH_EMAIL_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          AUTH_EMAIL_KEY_VERSION: ci-v1
+          AUTH_TERMS_VERSION: ci-terms
+          AUTH_PRIVACY_VERSION: ci-privacy
+          AUTH_EMAIL_FROM: identity-readiness@example.test
+          RESEND_API_KEY: re_ci_readiness_only
+          RESEND_WEBHOOK_SECRET: whsec_ci_readiness_only
+          CRON_SECRET: cron_ci_readiness_only
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3001 > /tmp/learning-hub-provider.log 2>&1 &
           server_pid=$!
@@ -128,6 +140,6 @@ jobs:
             sleep 1
           done
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' "$app_url/api/health/ready")" = "200"
-          test "$(curl --silent "$app_url/api/health/ready")" = '{"status":"ready","service":"learning-hub","dependencies":{"database":"ready"}}'
+          test "$(curl --silent "$app_url/api/health/ready")" = '{"status":"ready","service":"learning-hub","dependencies":{"database":"ready","identityOperations":"ready"}}'
       - if: steps.scope.outputs.code == 'true'
         run: npm audit --omit=dev --audit-level=high

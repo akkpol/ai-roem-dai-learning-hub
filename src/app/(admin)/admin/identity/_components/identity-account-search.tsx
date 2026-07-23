@@ -70,6 +70,7 @@ export function IdentityAccountSearch() {
     }
     setFieldError(null);
     setRequestError(null);
+    setAccounts(null);
     setPending(true);
     try {
       const response = await fetch(
@@ -107,7 +108,12 @@ export function IdentityAccountSearch() {
                 id="identity-account-query"
                 name="query"
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setAccounts(null);
+                  setFieldError(null);
+                  setRequestError(null);
+                }}
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby="identity-query-description"
                 autoComplete="off"
@@ -130,6 +136,15 @@ export function IdentityAccountSearch() {
         </form>
 
         <div className="mt-6" aria-live="polite">
+          {pending ? (
+            <div
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+              role="status"
+            >
+              <Spinner />
+              กำลังค้นหาบัญชีแบบตรงทั้งหมด…
+            </div>
+          ) : null}
           {requestError ? (
             <Alert variant="destructive">
               <AlertTitle>ค้นหาไม่สำเร็จ</AlertTitle>
@@ -143,7 +158,7 @@ export function IdentityAccountSearch() {
               </Button>
             </Alert>
           ) : null}
-          {accounts === null && !requestError ? (
+          {accounts === null && !requestError && !pending ? (
             <Empty>
               <EmptyHeader>
                 <EmptyMedia variant="icon">

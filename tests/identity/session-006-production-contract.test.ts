@@ -58,4 +58,18 @@ describe("SESSION-006 production contract", () => {
     expect(emailJob).toMatch(/export function GET/);
     expect(emailJob).not.toMatch(/export function POST/);
   });
+
+  it("runs provider readiness with the complete operations contract", () => {
+    const workflow = source(".github/workflows/ci.yml");
+    for (const variable of [
+      "IDENTITY_EMAIL_WORKER_DATABASE_URL",
+      "IDENTITY_MAINTENANCE_DATABASE_URL",
+      "RESEND_API_KEY",
+      "RESEND_WEBHOOK_SECRET",
+      "CRON_SECRET",
+    ]) {
+      expect(workflow).toContain(`${variable}:`);
+    }
+    expect(workflow).toContain('"identityOperations":"ready"');
+  });
 });

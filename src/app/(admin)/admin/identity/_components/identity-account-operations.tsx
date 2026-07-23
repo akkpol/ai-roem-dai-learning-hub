@@ -9,7 +9,6 @@ import {
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -136,6 +135,7 @@ function AccountActionDialog({
   );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const validReason = /^[a-z0-9][a-z0-9_.-]{2,63}$/.test(reason);
 
   async function submit() {
@@ -161,8 +161,9 @@ function AccountActionDialog({
         },
       );
       if (!response.ok) throw new Error("request failed");
-      onCompleted("บันทึกการเปลี่ยนแปลงพร้อม audit แล้ว");
+      await onCompleted("บันทึกการเปลี่ยนแปลงพร้อม audit แล้ว");
       setReason("");
+      setOpen(false);
     } catch {
       setError(
         "ดำเนินการไม่สำเร็จ สิทธิ์หรือสถานะอาจเปลี่ยนไปแล้ว กรุณาโหลดข้อมูลใหม่",
@@ -173,7 +174,17 @@ function AccountActionDialog({
   }
 
   return (
-    <AlertDialogTrigger>
+    <AlertDialogTrigger
+      isOpen={open}
+      onOpenChange={(nextOpen) => {
+        if (pending) return;
+        setOpen(nextOpen);
+        if (!nextOpen) {
+          setError(null);
+          setReason("");
+        }
+      }}
+    >
       <Button
         type="button"
         variant={destructive ? "destructive" : "outline"}
@@ -219,6 +230,7 @@ function AccountActionDialog({
               aria-invalid={error ? true : undefined}
               disabled={pending}
               autoComplete="off"
+              autoFocus
             />
             <FieldDescription>
               ห้ามใส่อีเมล ชื่อ หรือรายละเอียดเคสที่เป็นข้อมูลส่วนบุคคล
@@ -230,14 +242,15 @@ function AccountActionDialog({
           <AlertDialogCancel isDisabled={pending}>
             ยกเลิก
           </AlertDialogCancel>
-          <AlertDialogAction
+          <Button
+            type="button"
             variant={destructive ? "destructive" : "default"}
             isDisabled={pending}
             onPress={() => void submit()}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
             {pending ? "กำลังบันทึก…" : "ยืนยันการดำเนินการ"}
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialogTrigger>

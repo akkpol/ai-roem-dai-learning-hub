@@ -57,18 +57,40 @@ test("exact search validates fields and recovers from a transient request error"
     "กรอก UUID ที่สมบูรณ์",
   );
 
-  let aborted = false;
+  let searchAttempts = 0;
   await page.route("**/api/admin/identity/accounts?query=*", async (route) => {
-    if (!aborted) {
-      aborted = true;
-      await route.abort("failed");
+    searchAttempts += 1;
+    if (searchAttempts === 2) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "temporarily_unavailable" }),
+      });
       return;
     }
-    await route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        accounts: [
+          {
+            accountId: targetAccountId,
+            displayName: "บัญชีทดสอบ",
+            status: "active",
+            emailVerified: true,
+            twoFactorEnabled: true,
+          },
+        ],
+      }),
+    });
   });
   await query.fill(targetEmail || targetAccountId);
   await page.getByRole("button", { name: "ค้นหาบัญชี" }).click();
+  await expect(page.getByRole("link", { name: "เปิดรายละเอียด" })).toBeVisible();
+  await query.fill("second@example.com");
+  await page.getByRole("button", { name: "ค้นหาบัญชี" }).click();
   await expect(page.getByText("ค้นหาไม่สำเร็จ")).toBeVisible();
+  await expect(page.getByRole("link", { name: "เปิดรายละเอียด" })).toHaveCount(0);
   await page.getByRole("button", { name: "ลองใหม่" }).click();
   await expect(page.getByRole("link", { name: "เปิดรายละเอียด" })).toBeVisible();
   await expect
@@ -78,6 +100,29 @@ test("exact search validates fields and recovers from a transient request error"
       ),
     )
     .toBe(true);
+});
+
+test("exact search renders a no-result state without stale navigation", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name.includes("support"),
+    "Exact email/account search is platform-admin only by the WP-01 matrix",
+  );
+  await page.route("**/api/admin/identity/accounts?query=*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ accounts: [] }),
+    }),
+  );
+  await page.goto("/admin/identity/accounts");
+  await page
+    .getByLabel("UUID หรืออีเมลตัวพิมพ์เล็ก")
+    .fill("nobody@example.com");
+  await page.getByRole("button", { name: "ค้นหาบัญชี" }).click();
+  await expect(page.getByText("ไม่พบบัญชีที่ตรงกัน")).toBeVisible();
+  await expect(page.getByRole("link", { name: "เปิดรายละเอียด" })).toHaveCount(0);
 });
 
 test("role-specific detail is keyboard reachable and preserves destructive focus", async ({
@@ -99,8 +144,81 @@ test("role-specific detail is keyboard reachable and preserves destructive focus
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel("Reason code")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(dialog.locator(":focus")).toHaveCount(1);
+  await dialog.getByLabel("Reason code").focus();
   await dialog.getByRole("button", { name: "ยกเลิก" }).click();
   await expect(trigger).toBeFocused();
+
+  if (support) {
+    await expect(page.getByRole("button", { name: "เพิ่มบทบาท" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ถอนบทบาท" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "ระงับบัญชี" })).toHaveCount(0);
+  }
+});
+
+test("destructive action keeps validation, pending, and request errors in the dialog", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name.includes("support"),
+    "Lifecycle mutation validation is platform-admin only",
+  );
+  await page.goto(`/admin/identity/accounts/${targetAccountId}`);
+  const trigger = page.getByRole("button", {
+    name: /ระงับบัญชี|เปิดใช้งานอีกครั้ง/,
+  });
+  await trigger.click();
+  const dialog = page.getByRole("alertdialog");
+  const confirm = dialog.getByRole("button", {
+    name: "ยืนยันการดำเนินการ",
+  });
+  await confirm.click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(/ใช้ reason code ตัวพิมพ์เล็ก/)).toBeVisible();
+
+  await dialog.getByLabel("Reason code").fill("e2e_request_retry");
+  let releaseFailure: (() => void) | undefined;
+  let actionAttempts = 0;
+  await page.route(
+    `**/api/admin/identity/accounts/${targetAccountId}`,
+    async (route, request) => {
+      if (request.method() !== "POST") {
+        await route.continue();
+        return;
+      }
+      actionAttempts += 1;
+      if (actionAttempts > 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: true }),
+        });
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        releaseFailure = resolve;
+      });
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "temporarily_unavailable" }),
+      });
+    },
+  );
+  const firstAttempt = confirm.click();
+  await expect(
+    dialog.getByRole("button", { name: "กำลังบันทึก…" }),
+  ).toBeDisabled();
+  releaseFailure?.();
+  await firstAttempt;
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("ดำเนินการไม่สำเร็จ")).toBeVisible();
+  await confirm.click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("alert")).toContainText(
+    "บันทึกการเปลี่ยนแปลงพร้อม audit แล้ว",
+  );
 });
 
 test("authorized disposable-target mutation reaches the real audited route", async ({

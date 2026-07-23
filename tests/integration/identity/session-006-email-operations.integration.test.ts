@@ -110,6 +110,57 @@ it("atomically claims distinct rows under concurrent workers and enforces lease 
   ).resolves.toEqual([{ state: "sent", encryptedPayload: null }]);
 });
 
+it("atomically expires queued secrets and only reclaims an expired lease", async () => {
+  const expiredAt = new Date(Date.now() - 60_000);
+  const seeded = await owner.db
+    .insert(identityEmailOutbox)
+    .values([
+      {
+        accountId,
+        template: "verify_email",
+        recipientHash: randomUUID(),
+        encryptedPayload: "v1.expired.pending.secret",
+        keyVersion: "v1",
+        expiresAt: expiredAt,
+      },
+      {
+        accountId,
+        template: "reset_password",
+        recipientHash: randomUUID(),
+        encryptedPayload: "v1.expired.sending.secret",
+        keyVersion: "v1",
+        expiresAt: expiredAt,
+        state: "sending",
+        leaseToken: randomUUID(),
+        leaseExpiresAt: expiredAt,
+      },
+    ])
+    .returning({ id: identityEmailOutbox.id });
+  const repository = createPostgresAuthEmailOutboxRepository(owner.db);
+
+  await expect(repository.expireStale({ now: new Date() })).resolves.toBe(2);
+  await expect(
+    owner.db
+      .select({
+        id: identityEmailOutbox.id,
+        state: identityEmailOutbox.state,
+        encryptedPayload: identityEmailOutbox.encryptedPayload,
+        leaseToken: identityEmailOutbox.leaseToken,
+      })
+      .from(identityEmailOutbox)
+      .where(eq(identityEmailOutbox.accountId, accountId)),
+  ).resolves.toEqual(
+    expect.arrayContaining(
+      seeded.map(({ id }) => ({
+        id,
+        state: "expired",
+        encryptedPayload: null,
+        leaseToken: null,
+      })),
+    ),
+  );
+});
+
 it("dedupes webhook events atomically while retaining provider ordering", async () => {
   const ledger = createPostgresResendDeliveryLedger(owner.db);
   const duplicateInput = {

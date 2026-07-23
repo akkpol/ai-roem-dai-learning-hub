@@ -24,12 +24,21 @@ import {
 import { readDatabaseConfig } from "@/platform/database/config";
 
 let connection: DatabaseConnection;
+let operatorConnection: DatabaseConnection;
 
 beforeAll(() => {
   connection = createDatabaseConnection(readDatabaseConfig(process.env));
+  operatorConnection = createDatabaseConnection(
+    readDatabaseConfig({
+      ...process.env,
+      DATABASE_URL: process.env.MIGRATION_DATABASE_URL,
+    }),
+  );
 });
 
-afterAll(async () => connection.close());
+afterAll(async () => {
+  await Promise.all([connection.close(), operatorConnection.close()]);
+});
 
 async function seedAccount(input: {
   role?: "platform_admin" | "support_operator";
@@ -68,7 +77,7 @@ async function seedAccount(input: {
     displayName: "SESSION-005 test",
   });
   if (input.role) {
-    await connection.db.insert(identityGlobalRoleGrants).values({
+    await operatorConnection.db.insert(identityGlobalRoleGrants).values({
       accountId,
       role: input.role,
       reasonCode: "integration_seed",
@@ -96,8 +105,8 @@ it("serializes first-admin bootstrap and creates exactly one grant", async () =>
     confirmation: "bootstrap-first-platform-admin",
   };
   const results = await Promise.allSettled([
-    bootstrapFirstPlatformAdmin(connection.db, command),
-    bootstrapFirstPlatformAdmin(connection.db, command),
+    bootstrapFirstPlatformAdmin(operatorConnection.db, command),
+    bootstrapFirstPlatformAdmin(operatorConnection.db, command),
   ]);
   expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
   expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
@@ -142,7 +151,7 @@ it("serializes concurrent role grants to one active grant", async () => {
 it("replaces an expired unrevoked grant without leaving stale access", async () => {
   const admin = await seedAccount({ role: "platform_admin" });
   const target = await seedAccount({ twoFactor: true });
-  await connection.db.insert(identityGlobalRoleGrants).values({
+  await operatorConnection.db.insert(identityGlobalRoleGrants).values({
     accountId: target.accountId,
     role: "support_operator",
     grantedByAccountId: admin.accountId,
@@ -183,7 +192,7 @@ it("invalidates stale role, status, and session state from the database", async 
     }),
   ).rejects.toThrow("permission denied");
 
-  await connection.db.insert(identityGlobalRoleGrants).values({
+  await operatorConnection.db.insert(identityGlobalRoleGrants).values({
     accountId: admin.accountId,
     role: "platform_admin",
     reasonCode: "restore_for_test",
@@ -315,7 +324,7 @@ it("rolls back status and session revocation when lifecycle audit/event work fai
 
 it("break-glass keeps role and active status while revoking sessions and MFA", async () => {
   const admin = await seedAccount({ role: "platform_admin" });
-  await recoverPlatformAdminMfa(connection.db, {
+  await recoverPlatformAdminMfa(operatorConnection.db, {
     accountId: admin.accountId,
     incidentId: "INC-SESSION005",
     environment: "test",

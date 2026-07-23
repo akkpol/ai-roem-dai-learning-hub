@@ -429,18 +429,28 @@ export function createIdentityAdministrationService(
             occurredAt: now,
           });
         }
-        const rows = await transaction
-          .insert(identityGlobalRoleGrants)
-          .values({
-            accountId: target.id,
-            role: command.role,
-            grantedByAccountId: current.accountId,
-            reasonCode: command.reasonCode,
-            startsAt: command.startsAt ?? now,
-            expiresAt: command.expiresAt,
-            grantedAt: now,
-          })
-          .returning({ id: identityGlobalRoleGrants.id });
+        const inserted = await transaction.execute<{ id: string }>(sql`
+          insert into identity_global_role_grants (
+            account_id,
+            role,
+            granted_by_account_id,
+            reason_code,
+            starts_at,
+            expires_at,
+            granted_at
+          ) values (
+            ${target.id}::uuid,
+            ${command.role},
+            ${current.accountId}::uuid,
+            ${command.reasonCode},
+            ${command.startsAt ?? now}::timestamptz,
+            ${command.expiresAt ?? null}::timestamptz,
+            ${now}::timestamptz
+          )
+          returning id
+        `);
+        const grant = inserted.rows[0];
+        if (!grant) throw new Error("role grant was not created");
         await testHooks?.afterRoleGrantWrites?.();
         await appendIdentityAudit(transaction, {
           targetAccountId: target.id,
@@ -448,7 +458,7 @@ export function createIdentityAdministrationService(
           action: "identity.global_role_granted.v1",
           reasonCode: command.reasonCode,
           correlationId: command.correlationId,
-          payload: { role: command.role, grantId: rows[0].id },
+          payload: { role: command.role, grantId: grant.id },
           occurredAt: now,
         });
         await publishLifecycleEvent(transaction, {
@@ -457,7 +467,7 @@ export function createIdentityAdministrationService(
           payload: { role: command.role, change: "granted" },
           occurredAt: now,
         });
-        return { grantId: rows[0].id };
+        return { grantId: grant.id };
       }),
 
     revokeGlobalRole: (command: RoleCommand) =>

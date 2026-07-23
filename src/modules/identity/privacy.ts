@@ -16,6 +16,7 @@ import {
   identityAccounts,
   identityAuditEvents,
   identityAuthFactors,
+  identityEmailDeliveries,
   identityEmailOutbox,
   identityPolicyAcceptances,
   identityProfiles,
@@ -471,6 +472,11 @@ export async function runIdentityRetention(
         ),
       )
       .limit(options.batchLimit);
+    const staleEmailDeliveries = await transaction
+      .select({ id: identityEmailDeliveries.id })
+      .from(identityEmailDeliveries)
+      .where(lte(identityEmailDeliveries.receivedAt, cutoffs.delivery))
+      .limit(options.batchLimit);
     const stalePolicyAcceptances = await transaction
       .select({ id: identityPolicyAcceptances.id })
       .from(identityPolicyAcceptances)
@@ -503,6 +509,7 @@ export async function runIdentityRetention(
       expiredRateLimits: expiredRateLimits.length,
       clearedEmailPayloads: stalePayloads.length,
       deletedEmailMetadata: staleEmailMetadata.length,
+      deletedEmailDeliveries: staleEmailDeliveries.length,
       removedPolicyAcceptances: stalePolicyAcceptances.length,
       anonymizedAuditEvents: staleAuditEvents.length,
       completedDeletions: dueClosures.length,
@@ -532,6 +539,14 @@ export async function runIdentityRetention(
     if (staleEmailMetadata.length) {
       await transaction.delete(identityEmailOutbox).where(
         inArray(identityEmailOutbox.id, staleEmailMetadata.map((row) => row.id)),
+      );
+    }
+    if (staleEmailDeliveries.length) {
+      await transaction.delete(identityEmailDeliveries).where(
+        inArray(
+          identityEmailDeliveries.id,
+          staleEmailDeliveries.map((row) => row.id),
+        ),
       );
     }
     for (const closure of dueClosures) {

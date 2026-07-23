@@ -1,10 +1,14 @@
 import { Resend } from "resend";
 
-import type { AuthEmailMessage, AuthEmailSender } from "./sender";
+import {
+  AuthEmailProviderError,
+  type AuthEmailMessage,
+  type AuthEmailSender,
+} from "./sender";
 
 type ResendResponse = {
   data: { id: string } | null;
-  error: { name?: string; message?: string } | null;
+  error: { name?: string; message?: string; statusCode?: number | null } | null;
 };
 
 type ResendClient = {
@@ -42,19 +46,41 @@ export function createResendAuthEmailSender(
   return {
     send: async (message) => {
       const rendered = render(message);
-      const response = await client.emails.send(
-        {
-          from,
-          to: [message.recipient],
-          subject: rendered.subject,
-          text: rendered.text,
-        },
-        { idempotencyKey: message.idempotencyKey },
-      );
-      if (response.error || !response.data) {
-        throw new Error("authentication email provider rejected request");
+      try {
+        const response = await client.emails.send(
+          {
+            from,
+            to: [message.recipient],
+            subject: rendered.subject,
+            text: rendered.text,
+          },
+          { idempotencyKey: message.idempotencyKey },
+        );
+        if (response.error || !response.data) {
+          const statusCode = response.error?.statusCode ?? null;
+          const retryable =
+            statusCode === 429 ||
+            (statusCode !== null && statusCode >= 500) ||
+            response.error?.name === "concurrent_idempotent_requests";
+          throw new AuthEmailProviderError({
+            code: retryable
+              ? statusCode === 429
+                ? "rate_limited"
+                : response.error?.name === "concurrent_idempotent_requests"
+                  ? "idempotency_in_progress"
+                  : "provider_unavailable"
+              : "provider_rejected",
+            retryable,
+          });
+        }
+        return { providerMessageId: response.data.id };
+      } catch (error) {
+        if (error instanceof AuthEmailProviderError) throw error;
+        throw new AuthEmailProviderError({
+          code: "provider_unavailable",
+          retryable: true,
+        });
       }
-      return { providerMessageId: response.data.id };
     },
   };
 }

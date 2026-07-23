@@ -51,3 +51,32 @@ describe("Resend authentication email adapter", () => {
     ).rejects.toThrow("authentication email provider rejected request");
   });
 });
+
+describe("SESSION-006 Resend retry classification", () => {
+  it("marks network throws as retryable without exposing provider text", async () => {
+    const sender = createResendAuthEmailSender(
+      {
+        emails: {
+          send: async () => {
+            throw new Error("socket failed for person@example.com?token=secret");
+          },
+        },
+      },
+      "Learning Hub <auth@example.com>",
+    );
+
+    await expect(
+      sender.send({
+        template: "verify_email",
+        recipient: "person@example.com",
+        actionUrl: "https://example.com/verify?token=secret",
+        idempotencyKey: "00000000-0000-4000-8000-000000000001",
+      }),
+    ).rejects.toMatchObject({
+      name: "AuthEmailProviderError",
+      code: "provider_unavailable",
+      retryable: true,
+      message: "authentication email provider rejected request",
+    });
+  });
+});

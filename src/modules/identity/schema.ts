@@ -274,16 +274,57 @@ export const identityEmailOutbox = pgTable(
     state: text("state").default("pending").notNull(),
     attemptCount: integer("attempt_count").default(0).notNull(),
     nextAttemptAt: utcTimestamp("next_attempt_at").defaultNow().notNull(),
+    leaseToken: uuid("lease_token"),
+    leaseExpiresAt: utcTimestamp("lease_expires_at"),
+    providerMessageId: text("provider_message_id"),
+    sentAt: utcTimestamp("sent_at"),
+    lastErrorCode: text("last_error_code"),
     expiresAt: utcTimestamp("expires_at").notNull(),
     createdAt: utcTimestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
     index("identity_email_outbox_dispatch_idx").on(table.state, table.nextAttemptAt),
+    uniqueIndex("identity_email_outbox_provider_message_unique")
+      .on(table.providerMessageId)
+      .where(sql`${table.providerMessageId} is not null`),
     check(
       "identity_email_outbox_state_check",
       sql`${table.state} in ('pending','sending','sent','retry_wait','dead_letter','expired')`,
     ),
     check("identity_email_outbox_attempt_count_check", sql`${table.attemptCount} >= 0`),
+    check(
+      "identity_email_outbox_lease_check",
+      sql`(${table.state} = 'sending' and ${table.leaseToken} is not null and ${table.leaseExpiresAt} is not null) or (${table.state} <> 'sending' and ${table.leaseToken} is null and ${table.leaseExpiresAt} is null)`,
+    ),
+    check(
+      "identity_email_outbox_payload_check",
+      sql`(${table.state} in ('sent','dead_letter','expired') and ${table.encryptedPayload} is null) or (${table.state} in ('pending','sending','retry_wait') and ${table.encryptedPayload} is not null)`,
+    ),
+  ],
+);
+
+export const identityEmailDeliveries = pgTable(
+  "identity_email_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: text("event_id").notNull().unique(),
+    outboxId: uuid("outbox_id").references(() => identityEmailOutbox.id, {
+      onDelete: "set null",
+    }),
+    providerMessageId: text("provider_message_id").notNull(),
+    state: text("state").notNull(),
+    providerCreatedAt: utcTimestamp("provider_created_at").notNull(),
+    receivedAt: utcTimestamp("received_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("identity_email_deliveries_message_time_idx").on(
+      table.providerMessageId,
+      table.providerCreatedAt,
+    ),
+    check(
+      "identity_email_deliveries_state_check",
+      sql`${table.state} in ('sent','delivered','bounced','complained','failed')`,
+    ),
   ],
 );
 

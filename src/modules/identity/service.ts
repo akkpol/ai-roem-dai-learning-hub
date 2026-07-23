@@ -147,6 +147,7 @@ export function createIdentityService(
           ]);
           await transaction.insert(identityAuditEvents).values({
             accountId: result.user.id,
+            actorAccountId: result.user.id,
             action: "identity.signup_requested.v1",
             payload: { source: "email_password" },
             occurredAt: command.ageAttestedAt,
@@ -188,6 +189,7 @@ export function createIdentityService(
               );
             await transaction.insert(identityAuditEvents).values({
               accountId: user.id,
+              actorAccountId: user.id,
               action: "identity.email_verified.v1",
               payload: { source: "email_link" },
               occurredAt: new Date(),
@@ -303,6 +305,7 @@ export function createIdentityService(
           await testHooks?.afterResetOutbox?.();
           await transaction.insert(identityAuditEvents).values({
             accountId: account.id,
+            actorAccountId: account.id,
             action: "identity.password_reset_requested.v1",
             payload: {
               source: "email_password",
@@ -326,6 +329,7 @@ export function createIdentityService(
           afterPasswordReset: async (user) => {
             await transaction.insert(identityAuditEvents).values({
               accountId: user.id,
+              actorAccountId: user.id,
               action: "identity.password_reset_completed.v1",
               payload: { source: "email_password" },
               occurredAt: new Date(),

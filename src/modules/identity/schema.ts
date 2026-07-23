@@ -53,6 +53,7 @@ export const identitySessions = pgTable(
     token: text("token").notNull().unique(),
     createdAt: utcTimestamp("created_at").defaultNow().notNull(),
     updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
+    mfaVerifiedAt: utcTimestamp("mfa_verified_at"),
     ipAddress: text("ip_address"),
     userAgent: text("user_agent"),
     userId: uuid("user_id")
@@ -60,6 +61,60 @@ export const identitySessions = pgTable(
       .references(() => identityAccounts.id, { onDelete: "cascade" }),
   },
   (table) => [index("identity_sessions_user_id_idx").on(table.userId)],
+);
+
+export const globalRoleValues = [
+  "reviewer",
+  "support_operator",
+  "finance_operator",
+  "platform_admin",
+] as const;
+
+export type GlobalRole = (typeof globalRoleValues)[number];
+
+export const identityGlobalRoleGrants = pgTable(
+  "identity_global_role_grants",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => identityAccounts.id, { onDelete: "restrict" }),
+    role: text("role").$type<GlobalRole>().notNull(),
+    grantedByAccountId: uuid("granted_by_account_id").references(
+      () => identityAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    revokedByAccountId: uuid("revoked_by_account_id").references(
+      () => identityAccounts.id,
+      { onDelete: "restrict" },
+    ),
+    reasonCode: text("reason_code").notNull(),
+    startsAt: utcTimestamp("starts_at").defaultNow().notNull(),
+    expiresAt: utcTimestamp("expires_at"),
+    grantedAt: utcTimestamp("granted_at").defaultNow().notNull(),
+    revokedAt: utcTimestamp("revoked_at"),
+  },
+  (table) => [
+    index("identity_global_role_grants_account_idx").on(
+      table.accountId,
+      table.startsAt,
+    ),
+    uniqueIndex("identity_global_role_grants_unrevoked_unique")
+      .on(table.accountId, table.role)
+      .where(sql`${table.revokedAt} is null`),
+    check(
+      "identity_global_role_grants_role_check",
+      sql`${table.role} in ('reviewer','support_operator','finance_operator','platform_admin')`,
+    ),
+    check(
+      "identity_global_role_grants_timeline_check",
+      sql`${table.expiresAt} is null or ${table.expiresAt} > ${table.startsAt}`,
+    ),
+    check(
+      "identity_global_role_grants_revocation_check",
+      sql`(${table.revokedAt} is null and ${table.revokedByAccountId} is null) or (${table.revokedAt} is not null and ${table.revokedByAccountId} is not null)`,
+    ),
+  ],
 );
 
 export const identityAuthFactors = pgTable(
@@ -177,11 +232,31 @@ export const identityAuditEvents = pgTable(
     accountId: uuid("account_id")
       .notNull()
       .references(() => identityAccounts.id, { onDelete: "restrict" }),
+    actorType: text("actor_type").default("account").notNull(),
+    actorAccountId: uuid("actor_account_id").references(
+      () => identityAccounts.id,
+      { onDelete: "restrict" },
+    ),
     action: text("action").notNull(),
-    payload: jsonb("payload").$type<Record<string, string>>().notNull(),
+    reasonCode: text("reason_code"),
+    correlationId: text("correlation_id"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
     occurredAt: utcTimestamp("occurred_at").notNull(),
   },
-  (table) => [index("identity_audit_account_time_idx").on(table.accountId, table.occurredAt)],
+  (table) => [
+    index("identity_audit_account_time_idx").on(
+      table.accountId,
+      table.occurredAt,
+    ),
+    index("identity_audit_actor_time_idx").on(
+      table.actorAccountId,
+      table.occurredAt,
+    ),
+    check(
+      "identity_audit_actor_check",
+      sql`(${table.actorType} = 'account' and ${table.actorAccountId} is not null) or (${table.actorType} in ('system:bootstrap','system:break-glass','system:maintenance') and ${table.actorAccountId} is null)`,
+    ),
+  ],
 );
 
 export const identityEmailOutbox = pgTable(

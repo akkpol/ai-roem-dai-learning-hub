@@ -144,6 +144,7 @@ export function createAccountSecurityService(
           .where(eq(identityAccounts.id, current.user.id));
         await transaction.insert(identityAuditEvents).values({
           accountId: current.user.id,
+          actorAccountId: current.user.id,
           action: "identity.profile_updated.v1",
           payload: { fields: "display_name,locale,time_zone" },
           occurredAt: now,
@@ -198,6 +199,7 @@ export function createAccountSecurityService(
           await auth.api.revokeSession({ body: { token: rows[0].token }, headers });
           await transaction.insert(identityAuditEvents).values({
             accountId: current.user.id,
+            actorAccountId: current.user.id,
             action: "identity.session_revoked.v1",
             payload: { scope: "single_device" },
             occurredAt: new Date(),
@@ -212,6 +214,7 @@ export function createAccountSecurityService(
         await auth.api.revokeOtherSessions({ headers });
         await transaction.insert(identityAuditEvents).values({
           accountId: current.user.id,
+          actorAccountId: current.user.id,
           action: "identity.sessions_revoked.v1",
           payload: { scope: "all_other" },
           occurredAt: new Date(),
@@ -232,6 +235,7 @@ export function createAccountSecurityService(
         });
         await transaction.insert(identityAuditEvents).values({
           accountId: current.user.id,
+          actorAccountId: current.user.id,
           action: "identity.password_changed.v1",
           payload: { sessions: "other_revoked" },
           occurredAt: new Date(),
@@ -253,8 +257,13 @@ export function createAccountSecurityService(
           headers,
           returnHeaders: true,
         });
+        await transaction
+          .update(identitySessions)
+          .set({ mfaVerifiedAt: new Date() })
+          .where(eq(identitySessions.token, result.response.token));
         await transaction.insert(identityAuditEvents).values({
           accountId: current.user.id,
+          actorAccountId: current.user.id,
           action: "identity.two_factor_enabled.v1",
           payload: { method: "totp" },
           occurredAt: new Date(),
@@ -283,8 +292,13 @@ export function createAccountSecurityService(
         await auth.api.verifyPassword({ body: { password }, headers });
         await verifySecondFactor(auth, headers, proof);
         const result = await auth.api.disableTwoFactor({ body: { password }, headers });
+        await transaction
+          .update(identitySessions)
+          .set({ mfaVerifiedAt: null })
+          .where(eq(identitySessions.userId, current.user.id));
         await transaction.insert(identityAuditEvents).values({
           accountId: current.user.id,
+          actorAccountId: current.user.id,
           action: "identity.two_factor_disabled.v1",
           payload: { method: proof.kind },
           occurredAt: new Date(),
@@ -301,6 +315,10 @@ export function createAccountSecurityService(
             headers,
             returnHeaders: true,
           });
+          await transaction
+            .update(identitySessions)
+            .set({ mfaVerifiedAt: new Date() })
+            .where(eq(identitySessions.token, result.response.token));
           return { status: true as const, headers: result.headers };
         }
         const result = await auth.api.verifyBackupCode({
@@ -312,6 +330,12 @@ export function createAccountSecurityService(
           headers,
           returnHeaders: true,
         });
+        const sessionToken = result.response.token;
+        if (!sessionToken) throw new Error("MFA session unavailable");
+        await transaction
+          .update(identitySessions)
+          .set({ mfaVerifiedAt: new Date() })
+          .where(eq(identitySessions.token, sessionToken));
         return { status: true as const, headers: result.headers };
       }),
   };

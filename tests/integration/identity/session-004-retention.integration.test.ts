@@ -60,6 +60,7 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
   await connection.db.insert(identityAuditEvents).values(
     ["event-a", "event-b", "event-c"].map((action) => ({
       accountId,
+      actorAccountId: accountId,
       action,
       payload: { retained: "sensitive-context" },
       occurredAt: new Date("2023-01-01T00:00:00.000Z"),
@@ -67,6 +68,7 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
   );
   await connection.db.insert(identityAuditEvents).values({
     accountId: recentlyClosedAccountId,
+    actorAccountId: recentlyClosedAccountId,
     action: "old-event-on-recent-closure",
     payload: { retained: "must-remain-for-two-years-after-closure" },
     occurredAt: new Date("2023-01-01T00:00:00.000Z"),

@@ -221,6 +221,7 @@ export function createIdentityPrivacyService(
         );
         await transaction.insert(identityAuditEvents).values({
           accountId: account.id,
+          actorAccountId: account.id,
           action: "identity.account_deletion_requested.v1",
           payload: { confirmation: "email" },
           occurredAt: now,
@@ -283,6 +284,7 @@ export function createIdentityPrivacyService(
         await testHooks?.afterDeletionScheduledWrites?.();
         await transaction.insert(identityAuditEvents).values({
           accountId: request.accountId,
+          actorAccountId: request.accountId,
           action: "identity.account_deletion_scheduled.v1",
           payload: { coolingPeriodDays: "7" },
           occurredAt: now,
@@ -336,6 +338,7 @@ export function createIdentityPrivacyService(
           returnHeaders: true,
         });
         let responseHeaders = signedIn.headers;
+        let mfaSessionToken: string | null = null;
         if (account.twoFactorEnabled) {
           if (!command.proof) throw new Error("second factor required");
           const continuation = new Headers(headers);
@@ -352,6 +355,7 @@ export function createIdentityPrivacyService(
               returnHeaders: true,
             });
             responseHeaders = verified.headers;
+            mfaSessionToken = verified.response.token ?? null;
           } else {
             const verified = await auth.api.verifyBackupCode({
               body: {
@@ -363,9 +367,16 @@ export function createIdentityPrivacyService(
               returnHeaders: true,
             });
             responseHeaders = verified.headers;
+            mfaSessionToken = verified.response.token ?? null;
           }
         }
         const now = new Date();
+        if (mfaSessionToken) {
+          await transaction
+            .update(identitySessions)
+            .set({ mfaVerifiedAt: now })
+            .where(eq(identitySessions.token, mfaSessionToken));
+        }
         await transaction
           .update(identityAccounts)
           .set({ status: "active", updatedAt: now })
@@ -381,6 +392,7 @@ export function createIdentityPrivacyService(
           );
         await transaction.insert(identityAuditEvents).values({
           accountId: account.id,
+          actorAccountId: account.id,
           action: "identity.account_deletion_cancelled.v1",
           payload: { authentication: account.twoFactorEnabled ? "password_mfa" : "password" },
           occurredAt: now,
@@ -572,6 +584,7 @@ export async function runIdentityRetention(
         .where(eq(identityAccountDeletionRequests.id, closure.id));
       await transaction.insert(identityAuditEvents).values({
         accountId: closure.accountId,
+        actorType: "system:maintenance",
         action: "identity.account_closed.v1",
         payload: { reasonCode: "user_requested" },
         occurredAt: now,

@@ -19,7 +19,9 @@
     "test:identity-acceptance": "vitest run --config vitest.identity-acceptance.config.ts",
     "test:provider-acceptance": "vitest run --config vitest.provider-acceptance.config.ts",
     "test:watch": "vitest",
-    "identity:retention": "tsx scripts/identity/run-retention.ts"
+    "identity:retention": "tsx scripts/identity/run-retention.ts",
+    "admin:bootstrap": "tsx scripts/identity/admin-bootstrap.ts",
+    "admin:recover-mfa": "tsx scripts/identity/admin-recover-mfa.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.6.23",

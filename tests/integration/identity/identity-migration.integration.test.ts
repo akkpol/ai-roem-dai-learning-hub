@@ -26,6 +26,7 @@ it("migrates the mapped Identity tables with UTC timestamps", async () => {
     "identity_accounts",
     "identity_audit_events",
     "identity_auth_factors",
+    "identity_email_deliveries",
     "identity_email_outbox",
     "identity_global_role_grants",
     "identity_policy_acceptances",

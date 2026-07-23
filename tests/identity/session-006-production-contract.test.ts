@@ -71,5 +71,7 @@ describe("SESSION-006 production contract", () => {
       expect(workflow).toContain(`${variable}:`);
     }
     expect(workflow).toContain('"identityOperations":"ready"');
+    const cronSecret = workflow.match(/CRON_SECRET:\s+([^\r\n]+)/)?.[1];
+    expect(cronSecret?.trim().length).toBeGreaterThanOrEqual(32);
   });
 });

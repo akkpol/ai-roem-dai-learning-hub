@@ -129,7 +129,7 @@ jobs:
           AUTH_EMAIL_FROM: identity-readiness@example.test
           RESEND_API_KEY: re_ci_readiness_only
           RESEND_WEBHOOK_SECRET: whsec_ci_readiness_only
-          CRON_SECRET: cron_ci_readiness_only
+          CRON_SECRET: cron_ci_readiness_only_000000000000
         run: |
           npm run start -- --hostname 127.0.0.1 --port 3001 > /tmp/learning-hub-provider.log 2>&1 &
           server_pid=$!

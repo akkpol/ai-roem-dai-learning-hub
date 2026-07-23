@@ -163,7 +163,7 @@ describe("SESSION-006 authentication email dispatcher", () => {
       deadLettered: 0,
       expired: 2,
     });
-    expect(repo.expireStale).toHaveBeenCalledWith({ now });
+    expect(repo.expireStale).toHaveBeenCalledWith({ now, limit: 10 });
     expect(telemetry).toHaveBeenCalledWith(
       "identity.email_outbox.expired",
       { count: 2 },

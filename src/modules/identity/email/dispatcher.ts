@@ -16,7 +16,7 @@ export type ClaimedAuthEmail = {
 };
 
 export type AuthEmailOutboxRepository = {
-  expireStale(input: { now: Date }): Promise<number>;
+  expireStale(input: { now: Date; limit: number }): Promise<number>;
   claimBatch(input: {
     limit: number;
     now: Date;
@@ -118,6 +118,7 @@ export function createAuthEmailDispatcher(input: {
       const startedAt = now();
       const expiredBeforeClaim = await input.repository.expireStale({
         now: startedAt,
+        limit,
       });
       const claimed = await input.repository.claimBatch({
         limit,
@@ -224,29 +225,37 @@ export function createPostgresAuthEmailOutboxRepository(
   leaseMs = 5 * 60_000,
 ): AuthEmailOutboxRepository {
   return {
-    expireStale: async ({ now }) => {
-      const rows = await database
-        .update(identityEmailOutbox)
-        .set({
-          state: "expired",
-          encryptedPayload: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          lastErrorCode: "token_expired",
-        })
-        .where(sql`
-          ${identityEmailOutbox.expiresAt} <= ${now}::timestamptz
-          and (
-            ${identityEmailOutbox.state} in ('pending', 'retry_wait')
-            or (
-              ${identityEmailOutbox.state} = 'sending'
-              and ${identityEmailOutbox.leaseExpiresAt} <= ${now}::timestamptz
-            )
+    expireStale: async ({ now, limit }) =>
+      database.transaction(async (transaction) => {
+        const result = await transaction.execute<{ id: string }>(sql`
+          with candidates as (
+            select id
+            from identity_email_outbox
+            where expires_at <= ${now}::timestamptz
+              and (
+                state in ('pending', 'retry_wait')
+                or (
+                  state = 'sending'
+                  and lease_expires_at <= ${now}::timestamptz
+                )
+              )
+            order by expires_at, created_at, id
+            for update skip locked
+            limit ${limit}
           )
-        `)
-        .returning({ id: identityEmailOutbox.id });
-      return rows.length;
-    },
+          update identity_email_outbox as outbox
+          set
+            state = 'expired',
+            encrypted_payload = null,
+            lease_token = null,
+            lease_expires_at = null,
+            last_error_code = 'token_expired'
+          from candidates
+          where outbox.id = candidates.id
+          returning outbox.id
+        `);
+        return result.rows.length;
+      }),
     claimBatch: async ({ limit, now }) =>
       database.transaction(async (transaction) => {
         const result = await transaction.execute<ClaimedAuthEmail>(sql`

@@ -112,6 +112,8 @@ it("atomically claims distinct rows under concurrent workers and enforces lease 
 
 it("atomically expires queued secrets and only reclaims an expired lease", async () => {
   const expiredAt = new Date(Date.now() - 60_000);
+  const activeLeaseToken = randomUUID();
+  const activeLeasePayload = "v1.expired.active-lease.secret";
   const seeded = await owner.db
     .insert(identityEmailOutbox)
     .values([
@@ -134,11 +136,24 @@ it("atomically expires queued secrets and only reclaims an expired lease", async
         leaseToken: randomUUID(),
         leaseExpiresAt: expiredAt,
       },
+      {
+        accountId,
+        template: "reset_password",
+        recipientHash: randomUUID(),
+        encryptedPayload: activeLeasePayload,
+        keyVersion: "v1",
+        expiresAt: expiredAt,
+        state: "sending",
+        leaseToken: activeLeaseToken,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      },
     ])
     .returning({ id: identityEmailOutbox.id });
   const repository = createPostgresAuthEmailOutboxRepository(owner.db);
 
-  await expect(repository.expireStale({ now: new Date() })).resolves.toBe(2);
+  await expect(
+    repository.expireStale({ now: new Date(), limit: 2 }),
+  ).resolves.toBe(2);
   await expect(
     owner.db
       .select({
@@ -151,7 +166,7 @@ it("atomically expires queued secrets and only reclaims an expired lease", async
       .where(eq(identityEmailOutbox.accountId, accountId)),
   ).resolves.toEqual(
     expect.arrayContaining(
-      seeded.map(({ id }) => ({
+      seeded.slice(0, 2).map(({ id }) => ({
         id,
         state: "expired",
         encryptedPayload: null,
@@ -159,6 +174,22 @@ it("atomically expires queued secrets and only reclaims an expired lease", async
       })),
     ),
   );
+  await expect(
+    owner.db
+      .select({
+        state: identityEmailOutbox.state,
+        encryptedPayload: identityEmailOutbox.encryptedPayload,
+        leaseToken: identityEmailOutbox.leaseToken,
+      })
+      .from(identityEmailOutbox)
+      .where(eq(identityEmailOutbox.id, seeded[2].id)),
+  ).resolves.toEqual([
+    {
+      state: "sending",
+      encryptedPayload: activeLeasePayload,
+      leaseToken: activeLeaseToken,
+    },
+  ]);
 });
 
 it("dedupes webhook events atomically while retaining provider ordering", async () => {

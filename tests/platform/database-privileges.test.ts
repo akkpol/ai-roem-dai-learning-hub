@@ -10,6 +10,13 @@ const outboxIntegration = readFileSync(
   new URL("../integration/database/outbox.integration.test.ts", import.meta.url),
   "utf8",
 );
+const identityAuthorizationMigration = readFileSync(
+  new URL(
+    "../../drizzle/0003_identity_authorization_roles_audit.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 describe("application database privileges", () => {
   it("grants only the event writes required by current callers", () => {
@@ -64,6 +71,27 @@ describe("application database privileges", () => {
     );
     expect(migration).toContain(
       "REVOKE USAGE, SELECT ON SEQUENCES FROM learning_hub_app;",
+    );
+  });
+
+  it("routes runtime audit writes through a constrained account-only function", () => {
+    expect(identityAuthorizationMigration).toContain(
+      "REVOKE INSERT ON TABLE identity_audit_events FROM learning_hub_app",
+    );
+    expect(identityAuthorizationMigration).not.toMatch(
+      /GRANT INSERT\s*\([^)]*\)\s*ON TABLE identity_audit_events TO learning_hub_app/i,
+    );
+    expect(identityAuthorizationMigration).toContain(
+      "GRANT EXECUTE ON FUNCTION identity_append_account_audit",
+    );
+    expect(identityAuthorizationMigration).toContain(
+      "identity_audit_payload_is_safe",
+    );
+    expect(identityAuthorizationMigration).toContain(
+      "'account'",
+    );
+    expect(identityAuthorizationMigration).not.toMatch(
+      /identity_append_account_audit[\s\S]*p_actor_type/i,
     );
   });
 });

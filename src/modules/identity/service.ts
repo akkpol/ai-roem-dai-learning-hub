@@ -3,6 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 import type { AppDatabase } from "@/platform/database/client";
 
 import { createTransactionAuth } from "./auth";
+import { appendIdentityAudit } from "./audit";
 import type { IdentityConfig } from "./config";
 import {
   genericAuthMessage,
@@ -11,7 +12,6 @@ import {
 import { enqueueAuthEmail } from "./email/outbox";
 import {
   identityAccounts,
-  identityAuditEvents,
   identityPolicyAcceptances,
   identityProfiles,
   identityVerifications,
@@ -145,8 +145,9 @@ export function createIdentityService(
               userAgent: request.userAgent,
             },
           ]);
-          await transaction.insert(identityAuditEvents).values({
-            accountId: result.user.id,
+          await appendIdentityAudit(transaction, {
+            targetAccountId: result.user.id,
+            actor: { type: "account", accountId: result.user.id },
             action: "identity.signup_requested.v1",
             payload: { source: "email_password" },
             occurredAt: command.ageAttestedAt,
@@ -186,8 +187,9 @@ export function createIdentityService(
                   eq(identityAccounts.status, "pending_verification"),
                 ),
               );
-            await transaction.insert(identityAuditEvents).values({
-              accountId: user.id,
+            await appendIdentityAudit(transaction, {
+              targetAccountId: user.id,
+              actor: { type: "account", accountId: user.id },
               action: "identity.email_verified.v1",
               payload: { source: "email_link" },
               occurredAt: new Date(),
@@ -301,8 +303,9 @@ export function createIdentityService(
         });
         if (account) {
           await testHooks?.afterResetOutbox?.();
-          await transaction.insert(identityAuditEvents).values({
-            accountId: account.id,
+          await appendIdentityAudit(transaction, {
+            targetAccountId: account.id,
+            actor: { type: "account", accountId: account.id },
             action: "identity.password_reset_requested.v1",
             payload: {
               source: "email_password",
@@ -324,8 +327,9 @@ export function createIdentityService(
           sendVerificationEmail: async () => undefined,
           sendResetPassword: async () => undefined,
           afterPasswordReset: async (user) => {
-            await transaction.insert(identityAuditEvents).values({
-              accountId: user.id,
+            await appendIdentityAudit(transaction, {
+              targetAccountId: user.id,
+              actor: { type: "account", accountId: user.id },
               action: "identity.password_reset_completed.v1",
               payload: { source: "email_password" },
               occurredAt: new Date(),

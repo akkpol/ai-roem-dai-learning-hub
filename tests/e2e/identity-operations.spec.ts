@@ -12,6 +12,7 @@ const targetAccountId =
 const targetEmail = process.env.IDENTITY_E2E_TARGET_EMAIL ?? "";
 const allowMutations = process.env.IDENTITY_E2E_ALLOW_MUTATIONS === "1";
 const consoleErrors = new Map<string, string[]>();
+const allowedConsoleErrors = new Map<string, RegExp[]>();
 
 test.beforeEach(async ({ page }, testInfo) => {
   const role = testInfo.project.name.includes("support") ? "support" : "admin";
@@ -31,12 +32,17 @@ test.beforeEach(async ({ page }, testInfo) => {
 
 test.afterEach(async ({}, testInfo) => {
   const errors = consoleErrors.get(testInfo.testId) ?? [];
+  const allowed = allowedConsoleErrors.get(testInfo.testId) ?? [];
+  const unexpected = errors.filter(
+    (message) => !allowed.some((pattern) => pattern.test(message)),
+  );
   await testInfo.attach("console-errors", {
     body: Buffer.from(JSON.stringify(errors, null, 2)),
     contentType: "application/json",
   });
   consoleErrors.delete(testInfo.testId);
-  expect(errors).toEqual([]);
+  allowedConsoleErrors.delete(testInfo.testId);
+  expect(unexpected).toEqual([]);
 });
 
 test("exact search validates fields and recovers from a transient request error", async ({
@@ -58,6 +64,9 @@ test("exact search validates fields and recovers from a transient request error"
   );
 
   let searchAttempts = 0;
+  allowedConsoleErrors.set(testInfo.testId, [
+    /Failed to load resource:.*status of 503/,
+  ]);
   await page.route("**/api/admin/identity/accounts?query=*", async (route) => {
     searchAttempts += 1;
     if (searchAttempts === 2) {
@@ -178,6 +187,9 @@ test("destructive action keeps validation, pending, and request errors in the di
   await expect(dialog.getByText(/ใช้ reason code ตัวพิมพ์เล็ก/)).toBeVisible();
 
   await dialog.getByLabel("Reason code").fill("e2e_request_retry");
+  allowedConsoleErrors.set(testInfo.testId, [
+    /Failed to load resource:.*status of 503/,
+  ]);
   let releaseFailure: (() => void) | undefined;
   let actionAttempts = 0;
   await page.route(

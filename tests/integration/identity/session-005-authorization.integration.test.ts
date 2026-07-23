@@ -91,9 +91,13 @@ function actor(accountId: string, sessionId: string): Actor {
 
 it("serializes first-admin bootstrap and creates exactly one grant", async () => {
   const target = await seedAccount({ twoFactor: true });
+  const command = {
+    accountId: target.accountId,
+    confirmation: "bootstrap-first-platform-admin",
+  };
   const results = await Promise.allSettled([
-    bootstrapFirstPlatformAdmin(connection.db, target.accountId),
-    bootstrapFirstPlatformAdmin(connection.db, target.accountId),
+    bootstrapFirstPlatformAdmin(connection.db, command),
+    bootstrapFirstPlatformAdmin(connection.db, command),
   ]);
   expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
   expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
@@ -315,6 +319,8 @@ it("break-glass keeps role and active status while revoking sessions and MFA", a
     accountId: admin.accountId,
     incidentId: "INC-SESSION005",
     environment: "test",
+    confirmationEnvironment: "test",
+    operatorEnvironment: "test",
   });
   await expect(
     connection.db

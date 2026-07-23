@@ -82,12 +82,42 @@ it("allows the app only the role-grant lifecycle columns it needs", async () => 
 it("keeps audit append-only while accepting attributed redacted events", async () => {
   const actorId = await seedAccount();
   const targetId = await seedAccount();
-  const inserted = await appClient.query<{ id: string }>(
-    "insert into identity_audit_events " +
-      "(account_id,actor_type,actor_account_id,action,reason_code,payload,occurred_at) " +
-      "values ($1,'account',$2,'identity.test.v1','security_review',$3::jsonb,now()) " +
-      "returning id",
-    [targetId, actorId, JSON.stringify({ safe: "metadata" })],
+  await expect(
+    appClient.query(
+      "insert into identity_audit_events " +
+        "(account_id,actor_type,actor_account_id,action,payload,occurred_at) " +
+        "values ($1,'system:bootstrap',null,'identity.test.v1','{}'::jsonb,now())",
+      [targetId],
+    ),
+  ).rejects.toThrow();
+  await expect(
+    appClient.query(
+      "select identity_append_account_audit($1,$2,$3,$4,null,$5::jsonb)",
+      [
+        targetId,
+        actorId,
+        "identity.test.v1",
+        "security_review",
+        JSON.stringify({ value: "person@example.test" }),
+      ],
+    ),
+  ).rejects.toThrow();
+  await expect(
+    migrationClient.query(
+      "insert into identity_audit_events " +
+        "(account_id,actor_type,actor_account_id,action,payload,occurred_at) " +
+        "values ($1,'system:maintenance',null,'identity.test.v1',$2::jsonb,now())",
+      [targetId, JSON.stringify({ material: "raw-session-token" })],
+    ),
+  ).rejects.toThrow();
+  await appClient.query(
+    "select identity_append_account_audit($1,$2,$3,$4,null,'{}'::jsonb)",
+    [targetId, actorId, "identity.account_suspended.v1", "security_review"],
+  );
+  const inserted = await migrationClient.query<{ id: string }>(
+    "select id from identity_audit_events " +
+      "where account_id = $1 and action = 'identity.account_suspended.v1' order by occurred_at desc limit 1",
+    [targetId],
   );
   const auditId = inserted.rows[0].id;
   await expect(

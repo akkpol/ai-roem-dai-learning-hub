@@ -22,9 +22,5 @@ export type {
   AuthorizationInput,
   Permission,
 } from "./authorization";
-export {
-  bootstrapFirstPlatformAdmin,
-  createIdentityAdministrationService,
-  recoverPlatformAdminMfa,
-} from "./administration";
+export { createIdentityAdministrationService } from "./administration";
 export * from "./schema";

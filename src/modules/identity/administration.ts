@@ -510,8 +510,14 @@ export function createIdentityAdministrationService(
 
 export async function bootstrapFirstPlatformAdmin(
   database: AppDatabase,
-  accountId: string,
+  input: {
+    accountId: string;
+    confirmation: string;
+  },
 ): Promise<{ grantId: string }> {
+  if (input.confirmation !== "bootstrap-first-platform-admin") {
+    throw new Error("bootstrap confirmation is required");
+  }
   return database.transaction(async (transaction) => {
     await transaction.execute(
       sql`select pg_advisory_xact_lock(hashtext('identity.admin.bootstrap'))`,
@@ -534,7 +540,7 @@ export async function bootstrapFirstPlatformAdmin(
     if (activeAdmins.length > 0) {
       throw new Error("platform admin already exists");
     }
-    const target = await lockTargetAccount(transaction, accountId);
+    const target = await lockTargetAccount(transaction, input.accountId);
     const factors = await transaction
       .select({ id: identityTwoFactors.id })
       .from(identityTwoFactors)
@@ -584,10 +590,25 @@ export async function bootstrapFirstPlatformAdmin(
 
 export async function recoverPlatformAdminMfa(
   database: AppDatabase,
-  input: { accountId: string; incidentId: string; environment: string },
+  input: {
+    accountId: string;
+    incidentId: string;
+    environment: string;
+    confirmationEnvironment: string;
+    operatorEnvironment: string | undefined;
+  },
 ): Promise<{ revokedSessions: number }> {
   if (!/^[A-Z][A-Z0-9-]{2,63}$/.test(input.incidentId)) {
     throw new Error("invalid incident id");
+  }
+  if (
+    !["development", "test", "preview", "production"].includes(
+      input.environment,
+    ) ||
+    input.environment !== input.confirmationEnvironment ||
+    input.environment !== input.operatorEnvironment
+  ) {
+    throw new Error("break-glass environment confirmation does not match");
   }
   return database.transaction(async (transaction) => {
     const target = await lockTargetAccount(transaction, input.accountId);

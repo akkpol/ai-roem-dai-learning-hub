@@ -34,7 +34,10 @@ async function main() {
   try {
     const result = await bootstrapFirstPlatformAdmin(
       connection.db,
-      options.accountId,
+      {
+        accountId: options.accountId,
+        confirmation: options.confirmation,
+      },
     );
     console.info("identity.admin_bootstrap.completed", {
       accountId: options.accountId,

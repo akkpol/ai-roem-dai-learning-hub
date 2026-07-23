@@ -74,6 +74,12 @@ const ownPermissions = new Set<Permission>([
   "identity.deletion.manage",
 ]);
 
+const ownStepUpPermissions = new Set<Permission>([
+  "identity.security.manage",
+  "identity.export.create",
+  "identity.deletion.manage",
+]);
+
 const supportPermissions = new Set<Permission>([
   "identity.account.support.read",
   "identity.account.sessions.revoke",
@@ -111,9 +117,14 @@ export function evaluateAuthorization(
   }
 
   if (ownPermissions.has(permission)) {
-    return targetAccountId === actor.accountId
-      ? { allowed: true, reason: "allowed" }
-      : deny("resource_ownership_required");
+    if (targetAccountId !== actor.accountId) {
+      return deny("resource_ownership_required");
+    }
+    if (ownStepUpPermissions.has(permission)) {
+      if (!actor.sessionFresh) return deny("fresh_session_required");
+      if (actor.mfaState === "required") return deny("mfa_required");
+    }
+    return { allowed: true, reason: "allowed" };
   }
 
   const allowedByRole =

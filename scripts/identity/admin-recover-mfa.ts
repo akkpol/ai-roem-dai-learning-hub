@@ -51,6 +51,8 @@ async function main() {
       accountId: options.accountId,
       incidentId: options.incidentId,
       environment: options.environment,
+      confirmationEnvironment: options.confirmation,
+      operatorEnvironment: process.env.IDENTITY_OPERATOR_ENVIRONMENT,
     });
     console.info("identity.admin_recover_mfa.completed", {
       accountId: options.accountId,

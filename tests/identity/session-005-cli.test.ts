@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+
+import {
+  bootstrapFirstPlatformAdmin,
+  recoverPlatformAdminMfa,
+} from "@/modules/identity/administration";
 
 function run(script: string, args: string[], overrides: Record<string, string> = {}) {
   return spawnSync(
@@ -19,6 +25,31 @@ function run(script: string, args: string[], overrides: Record<string, string> =
 }
 
 describe("SESSION-005 privileged operator CLI safety", () => {
+  it("does not expose raw bootstrap or break-glass use cases from the public module", () => {
+    const publicIndex = readFileSync("src/modules/identity/index.ts", "utf8");
+    expect(publicIndex).not.toContain("bootstrapFirstPlatformAdmin");
+    expect(publicIndex).not.toContain("recoverPlatformAdminMfa");
+    expect(publicIndex).toContain("createIdentityAdministrationService");
+  });
+
+  it("enforces operator intent inside the privileged use cases", async () => {
+    await expect(
+      bootstrapFirstPlatformAdmin({} as never, {
+        accountId: "00000000-0000-4000-8000-000000000001",
+        confirmation: "bypassed",
+      }),
+    ).rejects.toThrow("bootstrap confirmation is required");
+    await expect(
+      recoverPlatformAdminMfa({} as never, {
+        accountId: "00000000-0000-4000-8000-000000000001",
+        incidentId: "INC-123",
+        environment: "preview",
+        confirmationEnvironment: "production",
+        operatorEnvironment: "preview",
+      }),
+    ).rejects.toThrow("break-glass environment confirmation does not match");
+  });
+
   it("bootstrap fails closed without the explicit confirmation flag", () => {
     const result = run("scripts/identity/admin-bootstrap.ts", [
       "--account=00000000-0000-4000-8000-000000000001",

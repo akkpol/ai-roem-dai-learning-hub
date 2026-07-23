@@ -42,6 +42,7 @@ function databaseWithExistingAccount(
       })),
     })),
     insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
+    execute: vi.fn(async () => undefined),
   };
   return {
     transaction: vi.fn(async (work) => work(transaction)),

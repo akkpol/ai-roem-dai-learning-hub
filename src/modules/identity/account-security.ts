@@ -3,11 +3,11 @@ import { and, desc, eq, ne } from "drizzle-orm";
 import type { AppDatabase } from "@/platform/database/client";
 
 import { createTransactionAuth } from "./auth";
+import { appendIdentityAudit } from "./audit";
 import type { IdentityConfig } from "./config";
 import type { ProfileUpdate, SecondFactorProof } from "./account-contracts";
 import {
   identityAccounts,
-  identityAuditEvents,
   identityPolicyAcceptances,
   identityProfiles,
   identitySessions,
@@ -142,9 +142,9 @@ export function createAccountSecurityService(
           .update(identityAccounts)
           .set({ name: command.displayName, updatedAt: now })
           .where(eq(identityAccounts.id, current.user.id));
-        await transaction.insert(identityAuditEvents).values({
-          accountId: current.user.id,
-          actorAccountId: current.user.id,
+        await appendIdentityAudit(transaction, {
+          targetAccountId: current.user.id,
+          actor: { type: "account", accountId: current.user.id },
           action: "identity.profile_updated.v1",
           payload: { fields: "display_name,locale,time_zone" },
           occurredAt: now,
@@ -197,9 +197,9 @@ export function createAccountSecurityService(
           );
         if (rows[0]) {
           await auth.api.revokeSession({ body: { token: rows[0].token }, headers });
-          await transaction.insert(identityAuditEvents).values({
-            accountId: current.user.id,
-            actorAccountId: current.user.id,
+          await appendIdentityAudit(transaction, {
+            targetAccountId: current.user.id,
+            actor: { type: "account", accountId: current.user.id },
             action: "identity.session_revoked.v1",
             payload: { scope: "single_device" },
             occurredAt: new Date(),
@@ -212,9 +212,9 @@ export function createAccountSecurityService(
       database.transaction(async (transaction) => {
         const { auth, current } = await authenticate(transaction, headers, true);
         await auth.api.revokeOtherSessions({ headers });
-        await transaction.insert(identityAuditEvents).values({
-          accountId: current.user.id,
-          actorAccountId: current.user.id,
+        await appendIdentityAudit(transaction, {
+          targetAccountId: current.user.id,
+          actor: { type: "account", accountId: current.user.id },
           action: "identity.sessions_revoked.v1",
           payload: { scope: "all_other" },
           occurredAt: new Date(),
@@ -233,9 +233,9 @@ export function createAccountSecurityService(
           headers,
           returnHeaders: true,
         });
-        await transaction.insert(identityAuditEvents).values({
-          accountId: current.user.id,
-          actorAccountId: current.user.id,
+        await appendIdentityAudit(transaction, {
+          targetAccountId: current.user.id,
+          actor: { type: "account", accountId: current.user.id },
           action: "identity.password_changed.v1",
           payload: { sessions: "other_revoked" },
           occurredAt: new Date(),
@@ -261,9 +261,9 @@ export function createAccountSecurityService(
           .update(identitySessions)
           .set({ mfaVerifiedAt: new Date() })
           .where(eq(identitySessions.token, result.response.token));
-        await transaction.insert(identityAuditEvents).values({
-          accountId: current.user.id,
-          actorAccountId: current.user.id,
+        await appendIdentityAudit(transaction, {
+          targetAccountId: current.user.id,
+          actor: { type: "account", accountId: current.user.id },
           action: "identity.two_factor_enabled.v1",
           payload: { method: "totp" },
           occurredAt: new Date(),
@@ -296,9 +296,9 @@ export function createAccountSecurityService(
           .update(identitySessions)
           .set({ mfaVerifiedAt: null })
           .where(eq(identitySessions.userId, current.user.id));
-        await transaction.insert(identityAuditEvents).values({
-          accountId: current.user.id,
-          actorAccountId: current.user.id,
+        await appendIdentityAudit(transaction, {
+          targetAccountId: current.user.id,
+          actor: { type: "account", accountId: current.user.id },
           action: "identity.two_factor_disabled.v1",
           payload: { method: proof.kind },
           occurredAt: new Date(),

@@ -30,4 +30,24 @@ describe("SESSION-005 identity audit redaction", () => {
       },
     });
   });
+
+  it("drops forbidden values even when callers hide them under generic keys", () => {
+    const payload = redactAuditPayload({
+      value: "person@example.test",
+      data: "raw-session-token",
+      material: "encrypted-payload",
+      nested: ["totp-secret", "recovery-code"],
+      count: 2,
+    });
+    expect(JSON.stringify(payload)).not.toMatch(
+      /person@example\.test|raw-session-token|encrypted-payload|totp-secret|recovery-code/,
+    );
+    expect(payload).toEqual({
+      value: "[REDACTED]",
+      data: "[REDACTED]",
+      material: "[REDACTED]",
+      nested: ["[REDACTED]", "[REDACTED]"],
+      count: 2,
+    });
+  });
 });

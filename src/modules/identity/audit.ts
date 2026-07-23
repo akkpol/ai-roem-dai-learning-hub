@@ -1,9 +1,13 @@
+import { sql } from "drizzle-orm";
+
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 
 import { identityAuditEvents } from "./schema";
 
 const secretKey =
-  /(?:password|token|secret|recovery[_-]?code|backup[_-]?code|authorization|cookie)/i;
+  /(?:password|token|secret|recovery[_-]?code|backup[_-]?code|authorization|cookie|credential|encrypted(?:[_-]?payload)?|email)/i;
+const secretValue =
+  /(?:[^\s@]+@[^\s@]+\.[^\s@]+|^(?:raw[-_ ]?)?(?:session[-_ ]?token|verification[-_ ]?token|totp[-_ ]?secret|recovery[-_ ]?code|backup[-_ ]?code|encrypted[-_ ]?payload|credential)(?:[-_ ].*)?$|^super[-_ ]?secret[-_ ]?password$)/i;
 
 export type AuditActor =
   | { type: "account"; accountId: string }
@@ -20,6 +24,9 @@ function redactValue(value: unknown): unknown {
         secretKey.test(key) ? "[REDACTED]" : redactValue(nested),
       ]),
     );
+  }
+  if (typeof value === "string" && secretValue.test(value)) {
+    return "[REDACTED]";
   }
   return value;
 }
@@ -42,15 +49,29 @@ export async function appendIdentityAudit(
     occurredAt?: Date;
   },
 ): Promise<void> {
+  const payload = redactAuditPayload(input.payload ?? {});
+  const occurredAt = input.occurredAt ?? new Date();
+  if (input.actor.type === "account") {
+    await transaction.execute(sql`
+      select identity_append_account_audit(
+        ${input.targetAccountId}::uuid,
+        ${input.actor.accountId}::uuid,
+        ${input.action}::text,
+        ${input.reasonCode ?? null}::text,
+        ${input.correlationId ?? null}::text,
+        ${JSON.stringify(payload)}::jsonb
+      )
+    `);
+    return;
+  }
   await transaction.insert(identityAuditEvents).values({
     accountId: input.targetAccountId,
     actorType: input.actor.type,
-    actorAccountId:
-      input.actor.type === "account" ? input.actor.accountId : null,
+    actorAccountId: null,
     action: input.action,
     reasonCode: input.reasonCode,
     correlationId: input.correlationId,
-    payload: redactAuditPayload(input.payload ?? {}),
-    occurredAt: input.occurredAt ?? new Date(),
+    payload,
+    occurredAt,
   });
 }

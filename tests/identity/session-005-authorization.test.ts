@@ -38,6 +38,61 @@ describe("SESSION-005 deny-by-default authorization matrix", () => {
     ).toMatchObject({ allowed: false, reason: "resource_ownership_required" });
   });
 
+  it("requires freshness and any enrolled MFA for own security, export, and deletion actions", () => {
+    const actor = activeActor();
+    for (const permission of [
+      "identity.security.manage",
+      "identity.export.create",
+      "identity.deletion.manage",
+    ] as const) {
+      expect(decision(actor, permission, actor.accountId)).toMatchObject({
+        allowed: true,
+        reason: "allowed",
+      });
+      expect(
+        decision(
+          { ...actor, sessionFresh: false },
+          permission,
+          actor.accountId,
+        ),
+      ).toMatchObject({
+        allowed: false,
+        reason: "fresh_session_required",
+      });
+      expect(
+        decision(
+          { ...actor, mfaState: "required" },
+          permission,
+          actor.accountId,
+        ),
+      ).toMatchObject({ allowed: false, reason: "mfa_required" });
+      expect(
+        decision(
+          { ...actor, mfaState: "not_enabled" },
+          permission,
+          actor.accountId,
+        ),
+      ).toMatchObject({ allowed: true, reason: "allowed" });
+    }
+  });
+
+  it("keeps ordinary own profile and device-session access independent of step-up", () => {
+    const actor = activeActor({
+      sessionFresh: false,
+      mfaState: "required",
+    });
+    for (const permission of [
+      "identity.profile.read",
+      "identity.profile.update",
+      "identity.sessions.manage",
+    ] as const) {
+      expect(decision(actor, permission, actor.accountId)).toMatchObject({
+        allowed: true,
+        reason: "allowed",
+      });
+    }
+  });
+
   it("denies unknown permissions and inactive accounts", () => {
     const actor = activeActor();
     expect(

@@ -7,7 +7,11 @@ export {
 } from "./contracts";
 export { createIdentityService } from "./service";
 export type { IdentityRequestContext } from "./service";
-export { getAccountHttpHandlers, getIdentityHttpHandlers } from "./runtime";
+export {
+  getAccountHttpHandlers,
+  getIdentityAdminHttpHandlers,
+  getIdentityHttpHandlers,
+} from "./runtime";
 export { runIdentityRetention } from "./privacy";
 export {
   authenticateRequest,
@@ -23,4 +27,22 @@ export type {
   Permission,
 } from "./authorization";
 export { createIdentityAdministrationService } from "./administration";
+export {
+  createIdentityAdminHttpHandlers,
+  parseExactAccountLookup,
+} from "./admin-http";
+export type {
+  ExactAccountLookup,
+  IdentityAdministrationPort,
+} from "./admin-http";
+export {
+  authorizeCronRequest,
+  createIdentityJobHandlers,
+  readCronSecret,
+} from "./jobs";
+export {
+  getIdentityJobHandlers,
+  handleResendWebhookRequest,
+  probeIdentityOperationsConfiguration,
+} from "./operations-runtime";
 export * from "./schema";

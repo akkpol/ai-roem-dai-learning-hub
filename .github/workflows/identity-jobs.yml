@@ -1,0 +1,97 @@
+name: Identity jobs
+
+on:
+  schedule:
+    # Offset from the top of the hour to reduce peak scheduler delay.
+    - cron: "2/5 * * * *"
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Identity job to invoke
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - email-delivery
+          - retention
+
+permissions: {}
+
+jobs:
+  email-delivery:
+    if: >-
+      (
+        (
+          github.event_name == 'schedule' &&
+          github.event.schedule == '2/5 * * * *' &&
+          vars.IDENTITY_EMAIL_DISPATCH_ENABLED == 'true'
+        ) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.job == 'all' || inputs.job == 'email-delivery')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    concurrency:
+      group: identity-jobs-production-email-delivery
+      cancel-in-progress: false
+    steps:
+      - name: Dispatch pending identity email
+        shell: bash
+        env:
+          BASE_URL: ${{ vars.IDENTITY_JOBS_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$BASE_URL"
+          test -n "$CRON_SECRET"
+          test "${#CRON_SECRET}" -ge 32
+          case "$BASE_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          base_url="${BASE_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 2 --retry-all-errors --max-time 90 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$base_url/api/jobs/identity/email-delivery"
+
+  retention:
+    if: >-
+      (
+        (
+          github.event_name == 'schedule' &&
+          github.event.schedule == '17 2 * * *' &&
+          vars.IDENTITY_RETENTION_ENABLED == 'true'
+        ) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.job == 'all' || inputs.job == 'retention')
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: identity-jobs-production-retention
+      cancel-in-progress: false
+    steps:
+      - name: Run identity retention
+        shell: bash
+        env:
+          BASE_URL: ${{ vars.IDENTITY_JOBS_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$BASE_URL"
+          test -n "$CRON_SECRET"
+          test "${#CRON_SECRET}" -ge 32
+          case "$BASE_URL" in
+            https://*) ;;
+            *) exit 1 ;;
+          esac
+          base_url="${BASE_URL%/}"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 --retry-delay 2 --retry-all-errors --max-time 300 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            "$base_url/api/jobs/identity/retention"

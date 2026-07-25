@@ -7,6 +7,9 @@ import { createAccountSecurityService } from "./account-security";
 import { createIdentityPrivacyService } from "./privacy";
 import { consumeIdentityRateLimit } from "./rate-limit";
 import { createIdentityService } from "./service";
+import { createIdentityAdministrationService } from "./administration";
+import { createIdentityAdminHttpHandlers } from "./admin-http";
+import { createIdentityAuthorizationService } from "./authorization";
 
 export function getIdentityHttpHandlers() {
   const config = readIdentityConfig(process.env);
@@ -32,5 +35,16 @@ export function getAccountHttpHandlers() {
     config,
     account: createAccountSecurityService(db, config),
     privacy: createIdentityPrivacyService(db, config),
+  });
+}
+
+export function getIdentityAdminHttpHandlers() {
+  const config = readIdentityConfig(process.env);
+  const { db } = getRuntimeDatabaseConnection();
+  const authorization = createIdentityAuthorizationService(db, config);
+  return createIdentityAdminHttpHandlers({
+    authenticate: authorization.authenticateRequest,
+    administration: createIdentityAdministrationService(db),
+    trustedOrigin: new URL(config.baseUrl).origin,
   });
 }

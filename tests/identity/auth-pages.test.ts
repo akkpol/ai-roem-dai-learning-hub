@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ForgotPasswordPage from "@/app/(auth)/forgot-password/page";
 import GoogleSignInErrorPage from "@/app/(auth)/sign-in/google-error/page";
@@ -14,6 +14,10 @@ import { LoginForm } from "@/components/login-form";
 const render = (Page: ComponentType) => renderToStaticMarkup(createElement(Page));
 
 describe("Public authentication pages", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     [SignUpPage, "สร้างบัญชี"],
     [LoginPage, "เข้าสู่ระบบ"],
@@ -49,18 +53,46 @@ describe("Public authentication pages", () => {
     expect(google).toContain('action="/api/auth/google"');
     expect(google).toContain('method="post"');
     expect(google).toContain("ดำเนินการต่อด้วย Google");
-    expect(
-      renderToStaticMarkup(
-        createElement(LoginForm, { googleEnabled: true }),
-      ),
-    ).toContain(
+    const googleLogin = renderToStaticMarkup(
+      createElement(LoginForm, {
+        googleDisclosure: {
+          termsUrl: "/terms",
+          privacyUrl: "/privacy",
+        },
+      }),
+    );
+    expect(googleLogin.replace(/<[^>]+>/g, "")).toContain(
       "เมื่อดำเนินการต่อ คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวฉบับปัจจุบัน",
     );
+    expect(googleLogin).toContain('href="/terms"');
+    expect(googleLogin).toContain('href="/privacy"');
+    expect(googleLogin).toContain(">ข้อกำหนดการใช้งาน</a>");
+    expect(googleLogin).toContain(">นโยบายความเป็นส่วนตัว</a>");
     expect(
       renderToStaticMarkup(
         createElement(GoogleSignInForm, { enabled: false }),
       ),
     ).toBe("");
+  });
+
+  it("renders the configured policy links in the Google signup disclosure", () => {
+    vi.stubEnv("AUTH_SECRET", "a".repeat(32));
+    vi.stubEnv(
+      "AUTH_BASE_URL",
+      "https://learning.example.test/api/auth",
+    );
+    vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-client-secret");
+    vi.stubEnv("AUTH_TERMS_VERSION", "terms-v1");
+    vi.stubEnv("AUTH_PRIVACY_VERSION", "privacy-v1");
+    vi.stubEnv("AUTH_TERMS_URL", "/terms");
+    vi.stubEnv("AUTH_PRIVACY_URL", "/privacy");
+
+    const signup = render(SignUpPage);
+
+    expect(signup).toContain("ดำเนินการต่อด้วย Google");
+    expect(signup).toContain('href="/terms"');
+    expect(signup).toContain('href="/privacy"');
   });
 
   it("uses a generic OAuth failure page without exposing provider details", () => {

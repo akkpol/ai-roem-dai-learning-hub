@@ -68,6 +68,39 @@ async function readGooglePolicyAcceptance(
   };
 }
 
+async function persistGooglePolicyAcceptance(
+  transaction: DatabaseTransaction,
+  accountId: string,
+  acceptance: GooglePolicyAcceptance,
+  request: Request,
+): Promise<void> {
+  await transaction
+    .insert(identityPolicyAcceptances)
+    .values([
+      {
+        accountId,
+        policyType: "terms",
+        policyVersion: acceptance.termsVersion,
+        acceptedAt: acceptance.acceptedAt,
+        userAgent: request.headers.get("user-agent") ?? undefined,
+      },
+      {
+        accountId,
+        policyType: "privacy",
+        policyVersion: acceptance.privacyVersion,
+        acceptedAt: acceptance.acceptedAt,
+        userAgent: request.headers.get("user-agent") ?? undefined,
+      },
+    ])
+    .onConflictDoNothing({
+      target: [
+        identityPolicyAcceptances.accountId,
+        identityPolicyAcceptances.policyType,
+        identityPolicyAcceptances.policyVersion,
+      ],
+    });
+}
+
 function createGoogleOnboardingCallbacks(
   transaction: DatabaseTransaction,
   config: GoogleAuthConfig,
@@ -92,22 +125,12 @@ function createGoogleOnboardingCallbacks(
         accountId: user.id,
         displayName: user.name.trim(),
       });
-      await transaction.insert(identityPolicyAcceptances).values([
-        {
-          accountId: user.id,
-          policyType: "terms",
-          policyVersion: acceptance.termsVersion,
-          acceptedAt: acceptance.acceptedAt,
-          userAgent: request.headers.get("user-agent") ?? undefined,
-        },
-        {
-          accountId: user.id,
-          policyType: "privacy",
-          policyVersion: acceptance.privacyVersion,
-          acceptedAt: acceptance.acceptedAt,
-          userAgent: request.headers.get("user-agent") ?? undefined,
-        },
-      ]);
+      await persistGooglePolicyAcceptance(
+        transaction,
+        user.id,
+        acceptance,
+        request,
+      );
       await appendIdentityAudit(transaction, {
         targetAccountId: user.id,
         actor: { type: "account", accountId: user.id },
@@ -123,6 +146,15 @@ function createGoogleOnboardingCallbacks(
         occurredAt: acceptance.acceptedAt,
       });
     },
+    beforeGoogleSessionCreate: async (userId: string): Promise<void> => {
+      const currentAcceptance = await readGooglePolicyAcceptance(config);
+      await persistGooglePolicyAcceptance(
+        transaction,
+        userId,
+        currentAcceptance,
+        request,
+      );
+    },
   };
 }
 
@@ -132,10 +164,11 @@ export function createGoogleLoginHandlers(
 ) {
   return {
     start: async (request: Request): Promise<Response> => {
-      if (!config.googleOAuth) return unavailable();
+      if (!config.googleOAuth || !config.currentPolicies) return unavailable();
       if (!sameOrigin(request, config)) {
         return Response.json({ message: "forbidden" }, { status: 403 });
       }
+      const currentPolicies = config.currentPolicies;
 
       try {
         return await database.transaction(async (transaction) => {
@@ -150,13 +183,11 @@ export function createGoogleLoginHandlers(
               requestSignUp: true,
               callbackURL: "/",
               errorCallbackURL: "/sign-in/google-error",
-              additionalData: config.currentPolicies
-                ? {
-                    policyAcceptedAt: new Date().toISOString(),
-                    termsVersion: config.currentPolicies.termsVersion,
-                    privacyVersion: config.currentPolicies.privacyVersion,
-                  }
-                : undefined,
+              additionalData: {
+                policyAcceptedAt: new Date().toISOString(),
+                termsVersion: currentPolicies.termsVersion,
+                privacyVersion: currentPolicies.privacyVersion,
+              },
             },
             headers: request.headers,
             asResponse: true,
@@ -171,7 +202,7 @@ export function createGoogleLoginHandlers(
     },
 
     callback: async (request: Request): Promise<Response> => {
-      if (!config.googleOAuth) return unavailable();
+      if (!config.googleOAuth || !config.currentPolicies) return unavailable();
       if (new URL(request.url).pathname !== "/api/auth/callback/google") {
         return unavailable();
       }

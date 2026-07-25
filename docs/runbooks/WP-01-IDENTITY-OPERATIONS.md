@@ -37,6 +37,10 @@ Configure Development, Preview, and Production independently:
   `AUTH_EMAIL_ENCRYPTION_KEY`, `AUTH_EMAIL_KEY_VERSION`,
   `AUTH_TERMS_VERSION`, `AUTH_PRIVACY_VERSION`, `AUTH_EMAIL_FROM`,
   `RESEND_API_KEY`, and `NEXT_PUBLIC_APP_URL`;
+- Google OAuth variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `AUTH_TERMS_URL`, and `AUTH_PRIVACY_URL`. Google OAuth fails closed unless
+  both credentials, both current policy versions, and both same-origin relative
+  policy paths are configured;
 - operations variables: `IDENTITY_EMAIL_WORKER_DATABASE_URL`,
   `IDENTITY_MAINTENANCE_DATABASE_URL`, `RESEND_WEBHOOK_SECRET`, and
   `CRON_SECRET`.

@@ -42,6 +42,8 @@ const config = {
   currentPolicies: {
     termsVersion: "terms-v1",
     privacyVersion: "privacy-v1",
+    termsUrl: "/terms",
+    privacyUrl: "/privacy",
   },
 } satisfies GoogleAuthConfig;
 
@@ -104,7 +106,11 @@ describe("Google login boundary", () => {
 
   it("onboards a new verified Google user with profile, current policies, and audit hooks", async () => {
     const transaction = {
-      insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          onConflictDoNothing: vi.fn(async () => undefined),
+        })),
+      })),
       execute: vi.fn(async () => undefined),
     };
     const onboardingDatabase = {
@@ -163,6 +169,188 @@ describe("Google login boundary", () => {
     expect(transaction.execute).toHaveBeenCalledTimes(2);
   });
 
+  it("persists exact policy acceptance idempotently for an existing Google user", async () => {
+    const onConflictDoNothing = vi.fn(async () => undefined);
+    const values = vi.fn(() => ({ onConflictDoNothing }));
+    const transaction = { insert: vi.fn(() => ({ values })) };
+    const existingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) =>
+        work(transaction),
+      ),
+    };
+    getOAuthStateMock.mockResolvedValue({
+      termsVersion: "terms-v1",
+      privacyVersion: "privacy-v1",
+      policyAcceptedAt: "2026-07-26T00:00:00.000Z",
+    });
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleSessionCreate(userId: string): Promise<void>;
+      };
+      await callbacks.beforeGoogleSessionCreate(
+        "22222222-2222-4222-8222-222222222222",
+      );
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://learning.example.test/" },
+      });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      existingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+        { headers: { "user-agent": "test-browser" } },
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(values).toHaveBeenCalledWith([
+      expect.objectContaining({
+        accountId: "22222222-2222-4222-8222-222222222222",
+        policyType: "terms",
+        policyVersion: "terms-v1",
+      }),
+      expect.objectContaining({
+        accountId: "22222222-2222-4222-8222-222222222222",
+        policyType: "privacy",
+        policyVersion: "privacy-v1",
+      }),
+    ]);
+    expect(onConflictDoNothing).toHaveBeenCalledOnce();
+  });
+
+  it("rolls back an existing-user callback when signed policy state is missing", async () => {
+    let rollbackObserved = false;
+    const transaction = { insert: vi.fn() };
+    const existingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) => {
+        try {
+          return await work(transaction);
+        } catch (error) {
+          rollbackObserved = true;
+          throw error;
+        }
+      }),
+    };
+    getOAuthStateMock.mockResolvedValue(null);
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleSessionCreate(userId: string): Promise<void>;
+      };
+      await callbacks.beforeGoogleSessionCreate(
+        "22222222-2222-4222-8222-222222222222",
+      );
+      return new Response(null, { status: 302 });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      existingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(rollbackObserved).toBe(true);
+    expect(response.status).toBe(303);
+    expect(transaction.insert).not.toHaveBeenCalled();
+  });
+
+  it("rolls back an existing-user callback when the current policy version changed", async () => {
+    let rollbackObserved = false;
+    const transaction = { insert: vi.fn() };
+    const existingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) => {
+        try {
+          return await work(transaction);
+        } catch (error) {
+          rollbackObserved = true;
+          throw error;
+        }
+      }),
+    };
+    getOAuthStateMock.mockResolvedValue({
+      termsVersion: "terms-previous",
+      privacyVersion: "privacy-v1",
+      policyAcceptedAt: "2026-07-26T00:00:00.000Z",
+    });
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleSessionCreate(userId: string): Promise<void>;
+      };
+      await callbacks.beforeGoogleSessionCreate(
+        "22222222-2222-4222-8222-222222222222",
+      );
+      return new Response(null, { status: 302 });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      existingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(rollbackObserved).toBe(true);
+    expect(response.status).toBe(303);
+    expect(transaction.insert).not.toHaveBeenCalled();
+  });
+
+  it("rolls back an existing-user callback when policy acceptance persistence fails", async () => {
+    let rollbackObserved = false;
+    const transaction = {
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({
+          onConflictDoNothing: vi.fn(async () => {
+            throw new Error("policy acceptance write failed");
+          }),
+        })),
+      })),
+    };
+    const existingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) => {
+        try {
+          return await work(transaction);
+        } catch (error) {
+          rollbackObserved = true;
+          throw error;
+        }
+      }),
+    };
+    getOAuthStateMock.mockResolvedValue({
+      termsVersion: "terms-v1",
+      privacyVersion: "privacy-v1",
+      policyAcceptedAt: "2026-07-26T00:00:00.000Z",
+    });
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleSessionCreate(userId: string): Promise<void>;
+      };
+      await callbacks.beforeGoogleSessionCreate(
+        "22222222-2222-4222-8222-222222222222",
+      );
+      return new Response(null, { status: 302 });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      existingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(rollbackObserved).toBe(true);
+    expect(response.status).toBe(303);
+  });
+
   it("fails closed and rolls back a new Google user without current policy state", async () => {
     let rollbackObserved = false;
     const transaction = {
@@ -216,12 +404,20 @@ describe("Google login boundary", () => {
     let rollbackObserved = false;
     let insertCount = 0;
     const transaction = {
-      insert: vi.fn(() => ({
-        values: vi.fn(async () => {
-          insertCount += 1;
-          if (insertCount === 2) throw new Error("policy write failed");
-        }),
-      })),
+      insert: vi.fn(() => {
+        insertCount += 1;
+        return {
+          values: vi.fn(() =>
+            insertCount === 2
+              ? {
+                  onConflictDoNothing: vi.fn(async () => {
+                    throw new Error("policy write failed");
+                  }),
+                }
+              : Promise.resolve(undefined),
+          ),
+        };
+      }),
       execute: vi.fn(async () => undefined),
     };
     const onboardingDatabase = {
@@ -308,6 +504,30 @@ describe("Google login boundary", () => {
     );
 
     expect(response.status).toBe(404);
+  });
+
+  it("fails closed when Google policy configuration is incomplete", async () => {
+    const loginDatabase = database();
+    const handlers = createGoogleLoginHandlers(loginDatabase as never, {
+      ...config,
+      currentPolicies: undefined,
+    });
+
+    const startResponse = await handlers.start(
+      new Request("https://learning.example.test/api/auth/google", {
+        method: "POST",
+        headers: { origin: "https://learning.example.test" },
+      }),
+    );
+    const callbackResponse = await handlers.callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(startResponse.status).toBe(404);
+    expect(callbackResponse.status).toBe(404);
+    expect(loginDatabase.transaction).not.toHaveBeenCalled();
   });
 
   it("delegates only the exact Google callback route to Better Auth", async () => {

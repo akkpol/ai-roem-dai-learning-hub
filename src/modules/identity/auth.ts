@@ -33,6 +33,7 @@ export type TransactionAuthCallbacks = {
     email: string;
     emailVerified: boolean;
   }): Promise<void>;
+  beforeGoogleSessionCreate?(userId: string): Promise<void>;
 };
 
 export type TransactionAuthOptions = {
@@ -98,11 +99,20 @@ export function createTransactionAuth(
               })
               .from(identityAccounts)
               .where(eq(identityAccounts.id, session.userId));
-            return (
+            const sessionAllowed =
               account[0]?.status === "active" &&
               (!options.googleOAuthCallback ||
-                account[0]?.twoFactorEnabled === false)
-            );
+                account[0]?.twoFactorEnabled === false);
+            if (!sessionAllowed) return false;
+            if (options.googleOAuthCallback) {
+              if (!callbacks.beforeGoogleSessionCreate) {
+                throw new Error(
+                  "Google policy acceptance callback is unavailable",
+                );
+              }
+              await callbacks.beforeGoogleSessionCreate(session.userId);
+            }
+            return true;
           },
         },
       },

@@ -9,6 +9,8 @@ const coreAuthEnvironmentShape = {
   GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
   AUTH_TERMS_VERSION: z.string().min(1).max(100).optional(),
   AUTH_PRIVACY_VERSION: z.string().min(1).max(100).optional(),
+  AUTH_TERMS_URL: z.string().min(1).max(2048).optional(),
+  AUTH_PRIVACY_URL: z.string().min(1).max(2048).optional(),
 };
 
 function hasPairedGoogleCredentials(value: {
@@ -36,10 +38,47 @@ const policyVersionPairIssue = {
   message: "Current policy versions must be configured as a pair",
 };
 
+function isSafeRelativePolicyPath(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    return assertRelativeCallbackPath(value) === value;
+  } catch {
+    return false;
+  }
+}
+
+function hasCompleteGooglePolicyConfiguration(value: {
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  AUTH_TERMS_VERSION?: string;
+  AUTH_PRIVACY_VERSION?: string;
+  AUTH_TERMS_URL?: string;
+  AUTH_PRIVACY_URL?: string;
+}): boolean {
+  if (!value.GOOGLE_CLIENT_ID && !value.GOOGLE_CLIENT_SECRET) return true;
+  return Boolean(
+    value.GOOGLE_CLIENT_ID &&
+      value.GOOGLE_CLIENT_SECRET &&
+      value.AUTH_TERMS_VERSION &&
+      value.AUTH_PRIVACY_VERSION &&
+      isSafeRelativePolicyPath(value.AUTH_TERMS_URL) &&
+      isSafeRelativePolicyPath(value.AUTH_PRIVACY_URL),
+  );
+}
+
+const googlePolicyConfigurationIssue = {
+  message:
+    "Google OAuth requires current policy versions and safe relative policy URLs",
+};
+
 const coreAuthEnvironment = z
   .object(coreAuthEnvironmentShape)
   .refine(hasPairedGoogleCredentials, googleCredentialPairIssue)
-  .refine(hasPairedPolicyVersions, policyVersionPairIssue);
+  .refine(hasPairedPolicyVersions, policyVersionPairIssue)
+  .refine(
+    hasCompleteGooglePolicyConfiguration,
+    googlePolicyConfigurationIssue,
+  );
 
 const identityEnvironment = z
   .object({
@@ -48,11 +87,17 @@ const identityEnvironment = z
     AUTH_EMAIL_KEY_VERSION: z.string().min(1).max(64),
     AUTH_TERMS_VERSION: z.string().min(1).max(100),
     AUTH_PRIVACY_VERSION: z.string().min(1).max(100),
+    AUTH_TERMS_URL: z.string().min(1).max(2048).optional(),
+    AUTH_PRIVACY_URL: z.string().min(1).max(2048).optional(),
     AUTH_EMAIL_FROM: z.string().min(3).max(320),
     RESEND_API_KEY: z.string().min(1).optional(),
   })
   .refine(hasPairedGoogleCredentials, googleCredentialPairIssue)
-  .refine(hasPairedPolicyVersions, policyVersionPairIssue);
+  .refine(hasPairedPolicyVersions, policyVersionPairIssue)
+  .refine(
+    hasCompleteGooglePolicyConfiguration,
+    googlePolicyConfigurationIssue,
+  );
 
 export type CoreAuthConfig = {
   authSecret: string;
@@ -64,6 +109,8 @@ export type CoreAuthConfig = {
   currentPolicies?: {
     termsVersion: string;
     privacyVersion: string;
+    termsUrl: string;
+    privacyUrl: string;
   };
   trustedProxy: TrustedProxyBoundary;
 };
@@ -98,10 +145,15 @@ function toCoreAuthConfig(
           }
         : undefined,
     currentPolicies:
-      value.AUTH_TERMS_VERSION && value.AUTH_PRIVACY_VERSION
+      value.AUTH_TERMS_VERSION &&
+      value.AUTH_PRIVACY_VERSION &&
+      value.AUTH_TERMS_URL &&
+      value.AUTH_PRIVACY_URL
         ? {
             termsVersion: value.AUTH_TERMS_VERSION,
             privacyVersion: value.AUTH_PRIVACY_VERSION,
+            termsUrl: assertRelativeCallbackPath(value.AUTH_TERMS_URL),
+            privacyUrl: assertRelativeCallbackPath(value.AUTH_PRIVACY_URL),
           }
         : undefined,
     trustedProxy: input.VERCEL === "1" ? "vercel" : "none",
@@ -142,10 +194,24 @@ export function readIdentityConfig(
   };
 }
 
-export function hasGoogleOAuthCredentials(
+export type GoogleOAuthDisclosure = {
+  termsUrl: string;
+  privacyUrl: string;
+};
+
+export function readGoogleOAuthDisclosure(
   input: Record<string, string | undefined>,
-): boolean {
-  return Boolean(input.GOOGLE_CLIENT_ID && input.GOOGLE_CLIENT_SECRET);
+): GoogleOAuthDisclosure | undefined {
+  try {
+    const config = readCoreAuthConfig(input);
+    if (!config.googleOAuth || !config.currentPolicies) return undefined;
+    return {
+      termsUrl: config.currentPolicies.termsUrl,
+      privacyUrl: config.currentPolicies.privacyUrl,
+    };
+  } catch {
+    return undefined;
+  }
 }
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();

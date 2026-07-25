@@ -26,6 +26,8 @@ const config = {
   currentPolicies: {
     termsVersion: "terms-v1",
     privacyVersion: "privacy-v1",
+    termsUrl: "/terms",
+    privacyUrl: "/privacy",
   },
 } satisfies GoogleAuthConfig;
 
@@ -106,12 +108,14 @@ describe("Google provider configuration", () => {
   });
 
   it("does not let Google OAuth bypass an enabled second factor", async () => {
+    const beforeGoogleSessionCreate = vi.fn(async () => undefined);
     const auth = createTransactionAuth(
       transaction("active", true) as never,
       config,
       {
         sendVerificationEmail: async () => undefined,
         sendResetPassword: async () => undefined,
+        beforeGoogleSessionCreate,
       },
       { googleOAuthCallback: true },
     ) as unknown as {
@@ -127,6 +131,36 @@ describe("Google provider configuration", () => {
     expect(
       await auth.databaseHooks.session.create.before({ userId: "mfa-id" }),
     ).toBe(false);
+    expect(beforeGoogleSessionCreate).not.toHaveBeenCalled();
+  });
+
+  it("persists Google policy acceptance before creating an allowed session", async () => {
+    const beforeGoogleSessionCreate = vi.fn(async () => undefined);
+    const auth = createTransactionAuth(
+      transaction("active") as never,
+      config,
+      {
+        sendVerificationEmail: async () => undefined,
+        sendResetPassword: async () => undefined,
+        beforeGoogleSessionCreate,
+      },
+      { googleOAuthCallback: true },
+    ) as unknown as {
+      databaseHooks: {
+        session: {
+          create: {
+            before: (session: { userId: string }) => Promise<boolean>;
+          };
+        };
+      };
+    };
+
+    await expect(
+      auth.databaseHooks.session.create.before({ userId: "active-google-id" }),
+    ).resolves.toBe(true);
+    expect(beforeGoogleSessionCreate).toHaveBeenCalledWith(
+      "active-google-id",
+    );
   });
 
   it("wires Google user creation hooks only for the OAuth callback", async () => {

@@ -1,4 +1,5 @@
 import { AuthForm } from "../_components/auth-form";
+import { GooglePolicyDisclosure } from "../_components/google-policy-disclosure";
 import { GoogleSignInForm } from "../_components/google-sign-in-form";
 
 import { LinkButton } from "@/components/ui/button";
@@ -10,15 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  FieldDescription,
-  FieldGroup,
-  FieldSeparator,
-} from "@/components/ui/field";
-import { hasGoogleOAuthCredentials } from "@/modules/identity";
+import { FieldGroup, FieldSeparator } from "@/components/ui/field";
+import { readGoogleOAuthDisclosure } from "@/modules/identity";
 
 export default function SignUpPage() {
-  const googleEnabled = hasGoogleOAuthCredentials(process.env);
+  const googleDisclosure = readGoogleOAuthDisclosure(process.env);
   return (
     <Card>
       <CardHeader>
@@ -30,12 +27,10 @@ export default function SignUpPage() {
       </CardHeader>
       <CardContent>
         <FieldGroup>
-          {googleEnabled && (
+          {googleDisclosure && (
             <>
               <GoogleSignInForm enabled />
-              <FieldDescription>
-                เมื่อดำเนินการต่อ คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวฉบับปัจจุบัน
-              </FieldDescription>
+              <GooglePolicyDisclosure disclosure={googleDisclosure} />
               <FieldSeparator>หรือสร้างบัญชีด้วยอีเมล</FieldSeparator>
             </>
           )}

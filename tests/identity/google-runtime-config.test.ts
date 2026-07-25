@@ -19,6 +19,8 @@ const {
     currentPolicies: {
       termsVersion: "terms-v1",
       privacyVersion: "privacy-v1",
+      termsUrl: "/terms",
+      privacyUrl: "/privacy",
     },
   };
   return {

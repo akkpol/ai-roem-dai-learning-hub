@@ -42,6 +42,12 @@ describe("SESSION-006 production contract", () => {
     expect(scheduler).toContain('cron: "17 2 * * *"');
     expect(scheduler).toContain("vars.IDENTITY_JOBS_BASE_URL");
     expect(scheduler).toContain("secrets.CRON_SECRET");
+    expect(scheduler).toContain("github.event_name == 'workflow_dispatch'");
+    expect(scheduler).toContain(
+      "identity-jobs-production-email-delivery",
+    );
+    expect(scheduler).toContain("identity-jobs-production-retention");
+    expect(scheduler).not.toContain("group: identity-jobs-production\n");
     expect(scheduler).toContain("/api/jobs/identity/email-delivery");
     expect(scheduler).toContain("/api/jobs/identity/retention");
     expect(scheduler).not.toContain("?account");

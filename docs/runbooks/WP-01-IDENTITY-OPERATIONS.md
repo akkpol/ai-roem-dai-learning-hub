@@ -115,14 +115,19 @@ Production deployment is ready:
 
 Keep both enable variables false or absent until the matching database roles,
 Resend configuration, and Production readiness check pass. Use
-`workflow_dispatch` to invoke one job after merge, then verify the response and
-application telemetry before enabling schedules.
+`workflow_dispatch` to invoke one selected job after merge; manual dispatch is
+intentionally independent of the schedule-enable variables. Verify the response
+and application telemetry before enabling schedules. Repository write access
+therefore authorizes a one-off Production job invocation and must remain
+restricted.
 
 GitHub documents five minutes as the shortest schedule interval and warns that
 scheduled runs can be delayed or dropped during high load. The workflow offsets
 execution from minute zero, while application leases, idempotency, retry, and
-oldest-pending-age monitoring remain the reliability controls. A manual
-protected GET proves route behavior, not scheduler execution.
+oldest-pending-age monitoring remain the reliability controls. Email delivery
+and retention use separate concurrency groups so a delayed five-minute run
+cannot replace the daily retention run. A manual protected GET proves route
+behavior, not scheduler execution.
 
 ## 6. First admin and normal role operations
 

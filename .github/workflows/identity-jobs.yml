@@ -19,16 +19,15 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: identity-jobs-production
-  cancel-in-progress: false
-
 jobs:
   email-delivery:
     if: >-
-      vars.IDENTITY_EMAIL_DISPATCH_ENABLED == 'true' &&
       (
-        github.event.schedule == '2/5 * * * *' ||
+        (
+          github.event_name == 'schedule' &&
+          github.event.schedule == '2/5 * * * *' &&
+          vars.IDENTITY_EMAIL_DISPATCH_ENABLED == 'true'
+        ) ||
         (
           github.event_name == 'workflow_dispatch' &&
           (inputs.job == 'all' || inputs.job == 'email-delivery')
@@ -36,6 +35,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 4
+    concurrency:
+      group: identity-jobs-production-email-delivery
+      cancel-in-progress: false
     steps:
       - name: Dispatch pending identity email
         shell: bash
@@ -58,9 +60,12 @@ jobs:
 
   retention:
     if: >-
-      vars.IDENTITY_RETENTION_ENABLED == 'true' &&
       (
-        github.event.schedule == '17 2 * * *' ||
+        (
+          github.event_name == 'schedule' &&
+          github.event.schedule == '17 2 * * *' &&
+          vars.IDENTITY_RETENTION_ENABLED == 'true'
+        ) ||
         (
           github.event_name == 'workflow_dispatch' &&
           (inputs.job == 'all' || inputs.job == 'retention')
@@ -68,6 +73,9 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: identity-jobs-production-retention
+      cancel-in-progress: false
     steps:
       - name: Run identity retention
         shell: bash

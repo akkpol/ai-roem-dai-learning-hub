@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createTransactionAuth } from "@/modules/identity/auth";
-import type { IdentityConfig } from "@/modules/identity/config";
+import type { CoreAuthConfig } from "@/modules/identity/config";
 
 const { betterAuthMock } = vi.hoisted(() => ({
   betterAuthMock: vi.fn((options: unknown) => options),
@@ -18,17 +18,12 @@ vi.mock("better-auth/plugins", () => ({
 const config = {
   authSecret: "a".repeat(32),
   baseUrl: "https://learning.example.test/api/auth",
-  emailEncryptionKey: Buffer.alloc(32),
-  emailKeyVersion: "v1",
-  termsVersion: "terms-v1",
-  privacyVersion: "privacy-v1",
-  emailFrom: "Learning Hub <auth@learning.example.test>",
   trustedProxy: "none",
   googleOAuth: {
     clientId: "google-client-id",
     clientSecret: "google-client-secret",
   },
-} satisfies IdentityConfig;
+} satisfies CoreAuthConfig;
 
 function transaction(
   status: "active" | "suspended",

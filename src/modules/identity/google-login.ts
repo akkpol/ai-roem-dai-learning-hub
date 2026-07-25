@@ -1,7 +1,7 @@
 import type { AppDatabase } from "@/platform/database/client";
 
 import { createTransactionAuth } from "./auth";
-import type { IdentityConfig } from "./config";
+import type { CoreAuthConfig } from "./config";
 
 const inertCallbacks = {
   sendVerificationEmail: async () => undefined,
@@ -12,11 +12,11 @@ function unavailable(): Response {
   return Response.json({ message: "not found" }, { status: 404 });
 }
 
-function sameOrigin(request: Request, config: IdentityConfig): boolean {
+function sameOrigin(request: Request, config: CoreAuthConfig): boolean {
   return request.headers.get("origin") === new URL(config.baseUrl).origin;
 }
 
-function isSuccessfulCallback(response: Response, config: IdentityConfig) {
+function isSuccessfulCallback(response: Response, config: CoreAuthConfig) {
   const location = response.headers.get("location");
   if (!location || response.status < 300 || response.status >= 400) return false;
   const redirect = new URL(location, config.baseUrl);
@@ -28,7 +28,7 @@ function isSuccessfulCallback(response: Response, config: IdentityConfig) {
 
 export function createGoogleLoginHandlers(
   database: AppDatabase,
-  config: IdentityConfig,
+  config: CoreAuthConfig,
 ) {
   return {
     start: async (request: Request): Promise<Response> => {

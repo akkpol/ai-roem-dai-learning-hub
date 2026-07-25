@@ -5,7 +5,7 @@ import { twoFactor } from "better-auth/plugins";
 
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 
-import type { IdentityConfig } from "./config";
+import type { CoreAuthConfig } from "./config";
 import { betterAuthSchema, identityAccounts } from "./schema";
 
 export type TransactionAuthCallbacks = {
@@ -29,7 +29,7 @@ export type TransactionAuthOptions = {
 
 export function createTransactionAuth(
   transaction: DatabaseTransaction,
-  config: IdentityConfig,
+  config: CoreAuthConfig,
   callbacks: TransactionAuthCallbacks,
   options: TransactionAuthOptions = {},
 ) {

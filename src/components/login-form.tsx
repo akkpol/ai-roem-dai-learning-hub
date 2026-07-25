@@ -28,8 +28,11 @@ export function LoginForm({
 
         {googleEnabled && (
           <>
-            <FieldSeparator>หรือเข้าสู่ระบบด้วย</FieldSeparator>
+            <FieldSeparator>หรือ</FieldSeparator>
             <GoogleSignInForm enabled />
+            <FieldDescription className="text-center">
+              เมื่อดำเนินการต่อ คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวฉบับปัจจุบัน
+            </FieldDescription>
           </>
         )}
 

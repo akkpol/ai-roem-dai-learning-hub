@@ -9,6 +9,7 @@ import SignUpPage from "@/app/(auth)/sign-up/page";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form";
 import LoginPage from "@/app/login/page";
+import { LoginForm } from "@/components/login-form";
 
 const render = (Page: ComponentType) => renderToStaticMarkup(createElement(Page));
 
@@ -22,11 +23,12 @@ describe("Public authentication pages", () => {
     expect(render(Page)).toContain(heading);
   });
 
-  it("uses safe credential autocomplete and explicit signup attestations", () => {
+  it("uses safe credential autocomplete and policy acceptance without an age gate", () => {
     const signup = render(SignUpPage);
     expect(signup).toContain('autoComplete="email"');
     expect(signup).toContain('autoComplete="new-password"');
-    expect(signup).toContain("อายุ 18 ปีขึ้นไป");
+    expect(signup).not.toContain("อายุ 18 ปีขึ้นไป");
+    expect(signup).not.toContain('name="ageAttested"');
     expect(signup).toContain("ข้อกำหนดการใช้งาน");
     expect(signup).not.toContain("TOTP");
     expect(signup).not.toContain("อุปกรณ์ที่เข้าสู่ระบบ");
@@ -39,14 +41,21 @@ describe("Public authentication pages", () => {
     expect(signIn).not.toContain("บัญชีของคุณอยู่ระหว่างลบ");
   });
 
-  it("offers Google login as an explicit existing-account action", () => {
+  it("offers one Google action for both new and existing accounts", () => {
     const google = renderToStaticMarkup(
       createElement(GoogleSignInForm, { enabled: true }),
     );
 
     expect(google).toContain('action="/api/auth/google"');
     expect(google).toContain('method="post"');
-    expect(google).toContain("เข้าสู่ระบบด้วย Google");
+    expect(google).toContain("ดำเนินการต่อด้วย Google");
+    expect(
+      renderToStaticMarkup(
+        createElement(LoginForm, { googleEnabled: true }),
+      ),
+    ).toContain(
+      "เมื่อดำเนินการต่อ คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวฉบับปัจจุบัน",
+    );
     expect(
       renderToStaticMarkup(
         createElement(GoogleSignInForm, { enabled: false }),
@@ -57,7 +66,7 @@ describe("Public authentication pages", () => {
   it("uses a generic OAuth failure page without exposing provider details", () => {
     const errorPage = render(GoogleSignInErrorPage);
 
-    expect(errorPage).toContain("เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+    expect(errorPage).toContain("ดำเนินการต่อด้วย Google ไม่สำเร็จ");
     expect(errorPage).toContain("/login");
     expect(errorPage).not.toContain("client_secret");
     expect(errorPage).not.toContain("state=");

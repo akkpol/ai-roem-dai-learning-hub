@@ -265,7 +265,6 @@ export function createSession003Spike(
                 defaultValue: "pending_verification",
                 input: false,
               },
-              ageAttestedAt: { type: "date", required: true },
             },
           },
           emailVerification: {
@@ -301,7 +300,6 @@ export function createSession003Spike(
             name: "Spike User",
             email,
             password: "correct-horse-battery-staple-003",
-            ageAttestedAt: now,
             callbackURL: "/verify-email",
           },
         });

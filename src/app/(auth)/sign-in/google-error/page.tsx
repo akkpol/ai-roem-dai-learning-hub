@@ -13,7 +13,7 @@ export default function GoogleSignInErrorPage() {
     <Card>
       <CardHeader>
         <CardTitle>
-          <h1>เข้าสู่ระบบด้วย Google ไม่สำเร็จ</h1>
+          <h1>ดำเนินการต่อด้วย Google ไม่สำเร็จ</h1>
         </CardTitle>
       </CardHeader>
       <CardContent>

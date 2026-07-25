@@ -101,7 +101,6 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
         displayName: "ผู้เรียนทดสอบ",
         email,
         password,
-        ageAttested: true,
         termsVersion: config.termsVersion,
         privacyVersion: config.privacyVersion,
         callbackPath: "/verify-email",

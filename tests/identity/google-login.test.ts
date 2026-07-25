@@ -1,25 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CoreAuthConfig } from "@/modules/identity/config";
+import type { GoogleAuthConfig } from "@/modules/identity/config";
 import { createGoogleLoginHandlers } from "@/modules/identity/google-login";
 
-const { signInSocial, authHandler, createTransactionAuthMock } = vi.hoisted(
+const { signInSocial, authHandler, createTransactionAuthMock, getOAuthStateMock } = vi.hoisted(
   () => {
     const signInSocial = vi.fn();
     const authHandler = vi.fn();
     return {
       signInSocial,
       authHandler,
-      createTransactionAuthMock: vi.fn(() => ({
-        api: { signInSocial },
-        handler: authHandler,
-      })),
+      createTransactionAuthMock: vi.fn(
+        (...args: unknown[]) => {
+          void args;
+          return {
+          api: { signInSocial },
+          handler: authHandler,
+          };
+        },
+      ),
+      getOAuthStateMock: vi.fn(),
     };
   },
 );
 
 vi.mock("@/modules/identity/auth", () => ({
   createTransactionAuth: createTransactionAuthMock,
+}));
+vi.mock("better-auth/api", () => ({
+  getOAuthState: getOAuthStateMock,
 }));
 
 const config = {
@@ -30,7 +39,11 @@ const config = {
     clientId: "google-client-id",
     clientSecret: "google-client-secret",
   },
-} satisfies CoreAuthConfig;
+  currentPolicies: {
+    termsVersion: "terms-v1",
+    privacyVersion: "privacy-v1",
+  },
+} satisfies GoogleAuthConfig;
 
 function database() {
   return {
@@ -44,6 +57,7 @@ describe("Google login boundary", () => {
   beforeEach(() => {
     signInSocial.mockReset();
     authHandler.mockReset();
+    getOAuthStateMock.mockReset();
     createTransactionAuthMock.mockClear();
   });
 
@@ -69,8 +83,14 @@ describe("Google login boundary", () => {
     expect(signInSocial).toHaveBeenCalledWith({
       body: {
         provider: "google",
+        requestSignUp: true,
         callbackURL: "/",
         errorCallbackURL: "/sign-in/google-error",
+        additionalData: {
+          policyAcceptedAt: expect.any(String),
+          termsVersion: "terms-v1",
+          privacyVersion: "privacy-v1",
+        },
       },
       headers: expect.any(Headers),
       asResponse: true,
@@ -80,6 +100,184 @@ describe("Google login boundary", () => {
       "https://accounts.google.test/oauth",
     );
     expect(response.headers.get("set-cookie")).toContain("better-auth.state");
+  });
+
+  it("onboards a new verified Google user with profile, current policies, and audit hooks", async () => {
+    const transaction = {
+      insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
+      execute: vi.fn(async () => undefined),
+    };
+    const onboardingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) =>
+        work(transaction),
+      ),
+    };
+    getOAuthStateMock.mockResolvedValue({
+      termsVersion: "terms-v1",
+      privacyVersion: "privacy-v1",
+      policyAcceptedAt: "2026-07-26T00:00:00.000Z",
+    });
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleUserCreate(user: {
+          id: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+        }): Promise<{ status: "active" }>;
+        afterGoogleUserCreate(user: {
+          id: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+        }): Promise<void>;
+      };
+      const user = {
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Google Learner",
+        email: "learner@example.test",
+        emailVerified: true,
+      };
+      await expect(callbacks.beforeGoogleUserCreate(user)).resolves.toEqual({
+        status: "active",
+      });
+      await callbacks.afterGoogleUserCreate(user);
+      return new Response(null, {
+        status: 302,
+        headers: { location: "https://learning.example.test/" },
+      });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      onboardingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+        { headers: { "user-agent": "test-browser" } },
+      ),
+    );
+
+    expect(response.status).toBe(302);
+    expect(transaction.insert).toHaveBeenCalledTimes(2);
+    expect(transaction.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed and rolls back a new Google user without current policy state", async () => {
+    let rollbackObserved = false;
+    const transaction = {
+      insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),
+      execute: vi.fn(async () => undefined),
+    };
+    const onboardingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) => {
+        try {
+          return await work(transaction);
+        } catch (error) {
+          rollbackObserved = true;
+          throw error;
+        }
+      }),
+    };
+    getOAuthStateMock.mockResolvedValue(null);
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleUserCreate(user: {
+          id: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+        }): Promise<{ status: "active" }>;
+      };
+      await callbacks.beforeGoogleUserCreate({
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Google Learner",
+        email: "learner@example.test",
+        emailVerified: true,
+      });
+      return new Response(null, { status: 302 });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      onboardingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(rollbackObserved).toBe(true);
+    expect(response.status).toBe(303);
+    expect(transaction.insert).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the OAuth account when an onboarding write fails", async () => {
+    let rollbackObserved = false;
+    let insertCount = 0;
+    const transaction = {
+      insert: vi.fn(() => ({
+        values: vi.fn(async () => {
+          insertCount += 1;
+          if (insertCount === 2) throw new Error("policy write failed");
+        }),
+      })),
+      execute: vi.fn(async () => undefined),
+    };
+    const onboardingDatabase = {
+      transaction: vi.fn(async (work: (value: object) => Promise<Response>) => {
+        try {
+          return await work(transaction);
+        } catch (error) {
+          rollbackObserved = true;
+          throw error;
+        }
+      }),
+    };
+    getOAuthStateMock.mockResolvedValue({
+      termsVersion: "terms-v1",
+      privacyVersion: "privacy-v1",
+      policyAcceptedAt: "2026-07-26T00:00:00.000Z",
+    });
+    authHandler.mockImplementationOnce(async () => {
+      const callbacks = createTransactionAuthMock.mock.calls.at(-1)?.[2] as {
+        beforeGoogleUserCreate(user: {
+          id: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+        }): Promise<{ status: "active" }>;
+        afterGoogleUserCreate(user: {
+          id: string;
+          name: string;
+          email: string;
+          emailVerified: boolean;
+        }): Promise<void>;
+      };
+      const user = {
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Google Learner",
+        email: "learner@example.test",
+        emailVerified: true,
+      };
+      await callbacks.beforeGoogleUserCreate(user);
+      await callbacks.afterGoogleUserCreate(user);
+      return new Response(null, { status: 302 });
+    });
+
+    const response = await createGoogleLoginHandlers(
+      onboardingDatabase as never,
+      config,
+    ).callback(
+      new Request(
+        "https://learning.example.test/api/auth/callback/google?code=safe&state=safe",
+      ),
+    );
+
+    expect(rollbackObserved).toBe(true);
+    expect(response.status).toBe(303);
+    expect(transaction.insert).toHaveBeenCalledTimes(2);
+    expect(transaction.execute).not.toHaveBeenCalled();
   });
 
   it("rejects cross-origin login starts before creating OAuth state", async () => {

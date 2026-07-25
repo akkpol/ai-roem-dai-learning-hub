@@ -18,12 +18,14 @@ const valid = {
 };
 
 describe("Identity configuration", () => {
-  it("reads only core auth settings for Google existing-account login", () => {
+  it("reads only core auth settings for the unified Google flow", () => {
     const coreOnly = {
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://learning.example.test/api/auth",
       GOOGLE_CLIENT_ID: "google-client-id",
       GOOGLE_CLIENT_SECRET: "google-client-secret",
+      AUTH_TERMS_VERSION: "terms-2026-07",
+      AUTH_PRIVACY_VERSION: "privacy-2026-07",
     };
 
     expect(readCoreAuthConfig(coreOnly)).toEqual({
@@ -32,6 +34,10 @@ describe("Identity configuration", () => {
       googleOAuth: {
         clientId: "google-client-id",
         clientSecret: "google-client-secret",
+      },
+      currentPolicies: {
+        termsVersion: "terms-2026-07",
+        privacyVersion: "privacy-2026-07",
       },
       trustedProxy: "none",
     });
@@ -78,6 +84,13 @@ describe("Identity configuration", () => {
       readCoreAuthConfig({
         ...coreOnly,
         GOOGLE_CLIENT_ID: undefined,
+      }),
+    ).toThrow("identity configuration is invalid");
+    expect(() =>
+      readCoreAuthConfig({
+        ...coreOnly,
+        AUTH_TERMS_VERSION: "terms-2026-07",
+        AUTH_PRIVACY_VERSION: undefined,
       }),
     ).toThrow("identity configuration is invalid");
   });

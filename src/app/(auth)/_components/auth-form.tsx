@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
   FieldDescription,
@@ -18,7 +17,7 @@ import { Spinner } from "@/components/ui/spinner";
 
 type Kind = "sign-up" | "sign-in" | "forgot-password" | "reset-password";
 type FormStatus = { tone: "success" | "error"; message: string } | null;
-type ValidatedField = "displayName" | "email" | "password" | "ageAttested";
+type ValidatedField = "displayName" | "email" | "password";
 
 const endpoints: Record<Kind, string> = {
   "sign-up": "/api/auth/sign-up",
@@ -71,8 +70,7 @@ export function AuthForm({
     if (
       input.name === "displayName" ||
       input.name === "email" ||
-      input.name === "password" ||
-      input.name === "ageAttested"
+      input.name === "password"
     ) {
       return input.name;
     }
@@ -86,9 +84,7 @@ export function AuthForm({
     if (!name) return;
 
     const message =
-      name === "ageAttested"
-        ? "กรุณายืนยันว่าคุณมีอายุ 18 ปีขึ้นไป"
-        : name === "email" && target.validity.typeMismatch
+      name === "email" && target.validity.typeMismatch
         ? "กรุณากรอกอีเมลให้ถูกต้อง"
         : name === "password" && target.validity.tooShort
           ? "รหัสผ่านต้องมีอย่างน้อย 12 ตัวอักษร"
@@ -117,7 +113,6 @@ export function AuthForm({
     for (const [key, value] of new FormData(event.currentTarget)) {
       if (typeof value === "string") values[key] = value;
     }
-    if (kind === "sign-up") values.ageAttested = values.ageAttested === "on";
     try {
       const response = await fetch(endpoints[kind], {
         method: "POST",
@@ -257,33 +252,6 @@ export function AuthForm({
 
         {kind === "sign-up" && (
           <>
-            <Field
-              data-invalid={Boolean(fieldErrors.ageAttested)}
-              orientation="horizontal"
-            >
-              <Checkbox
-                id="ageAttested"
-                name="ageAttested"
-                value="on"
-                isInvalid={Boolean(fieldErrors.ageAttested)}
-                isRequired
-                aria-describedby={
-                  fieldErrors.ageAttested ? "ageAttested-error" : undefined
-                }
-                onChange={() =>
-                  setFieldErrors((current) => ({
-                    ...current,
-                    ageAttested: undefined,
-                  }))
-                }
-              />
-              <FieldLabel htmlFor="ageAttested">
-                ฉันยืนยันว่ามีอายุ 18 ปีขึ้นไป
-              </FieldLabel>
-            </Field>
-            <FieldError id="ageAttested-error">
-              {fieldErrors.ageAttested}
-            </FieldError>
             <FieldDescription>
               เมื่อสร้างบัญชี คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว
             </FieldDescription>

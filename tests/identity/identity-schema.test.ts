@@ -27,7 +27,8 @@ describe("Identity schema", () => {
     });
   });
 
-  it("keeps required account and atomic signup fields", () => {
+  it("keeps account and atomic signup fields without requiring age data", () => {
+    const accountColumns = getTableColumns(identityAccounts);
     expect(Object.keys(getTableColumns(identityAccounts))).toEqual(
       expect.arrayContaining([
         "id",
@@ -37,6 +38,7 @@ describe("Identity schema", () => {
         "ageAttestedAt",
       ]),
     );
+    expect(accountColumns.ageAttestedAt.notNull).toBe(false);
     expect(getTableName(identityProfiles)).toBe("identity_profiles");
     expect(getTableName(identityPolicyAcceptances)).toBe(
       "identity_policy_acceptances",

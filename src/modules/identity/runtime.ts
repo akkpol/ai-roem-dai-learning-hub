@@ -10,6 +10,7 @@ import { createIdentityService } from "./service";
 import { createIdentityAdministrationService } from "./administration";
 import { createIdentityAdminHttpHandlers } from "./admin-http";
 import { createIdentityAuthorizationService } from "./authorization";
+import { createGoogleLoginHandlers } from "./google-login";
 
 export function getIdentityHttpHandlers() {
   const config = readIdentityConfig(process.env);
@@ -26,6 +27,12 @@ export function getIdentityHttpHandlers() {
         { windowSeconds, max },
       ),
   });
+}
+
+export function getGoogleLoginHandlers() {
+  const config = readIdentityConfig(process.env);
+  const { db } = getRuntimeDatabaseConnection();
+  return createGoogleLoginHandlers(db, config);
 }
 
 export function getAccountHttpHandlers() {

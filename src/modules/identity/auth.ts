@@ -1,11 +1,12 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { eq } from "drizzle-orm";
 import { betterAuth } from "better-auth";
 import { twoFactor } from "better-auth/plugins";
 
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 
 import type { IdentityConfig } from "./config";
-import { betterAuthSchema } from "./schema";
+import { betterAuthSchema, identityAccounts } from "./schema";
 
 export type TransactionAuthCallbacks = {
   sendVerificationEmail(input: {
@@ -22,10 +23,15 @@ export type TransactionAuthCallbacks = {
   afterPasswordReset?(user: { id: string }): Promise<void>;
 };
 
+export type TransactionAuthOptions = {
+  googleOAuthCallback?: boolean;
+};
+
 export function createTransactionAuth(
   transaction: DatabaseTransaction,
   config: IdentityConfig,
   callbacks: TransactionAuthCallbacks,
+  options: TransactionAuthOptions = {},
 ) {
   return betterAuth({
     appName: "Learning Hub",
@@ -38,6 +44,39 @@ export function createTransactionAuth(
       transaction: false,
     }),
     logger: { disabled: true },
+    socialProviders: config.googleOAuth
+      ? {
+          google: {
+            clientId: config.googleOAuth.clientId,
+            clientSecret: config.googleOAuth.clientSecret,
+            disableSignUp: true,
+            prompt: "select_account",
+          },
+        }
+      : {},
+    account: {
+      encryptOAuthTokens: true,
+    },
+    databaseHooks: {
+      session: {
+        create: {
+          before: async (session) => {
+            const account = await transaction
+              .select({
+                status: identityAccounts.status,
+                twoFactorEnabled: identityAccounts.twoFactorEnabled,
+              })
+              .from(identityAccounts)
+              .where(eq(identityAccounts.id, session.userId));
+            return (
+              account[0]?.status === "active" &&
+              (!options.googleOAuthCallback ||
+                account[0]?.twoFactorEnabled === false)
+            );
+          },
+        },
+      },
+    },
     user: {
       additionalFields: {
         status: {

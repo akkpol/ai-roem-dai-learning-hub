@@ -2,16 +2,28 @@ import { z } from "zod";
 
 import type { TrustedProxyBoundary } from "@/platform/security/client-ip";
 
-const identityEnvironment = z.object({
-  AUTH_SECRET: z.string().min(32),
-  AUTH_BASE_URL: z.string().url(),
-  AUTH_EMAIL_ENCRYPTION_KEY: z.string().min(1),
-  AUTH_EMAIL_KEY_VERSION: z.string().min(1).max(64),
-  AUTH_TERMS_VERSION: z.string().min(1).max(100),
-  AUTH_PRIVACY_VERSION: z.string().min(1).max(100),
-  AUTH_EMAIL_FROM: z.string().min(3).max(320),
-  RESEND_API_KEY: z.string().min(1).optional(),
-});
+const identityEnvironment = z
+  .object({
+    AUTH_SECRET: z.string().min(32),
+    AUTH_BASE_URL: z.string().url(),
+    AUTH_EMAIL_ENCRYPTION_KEY: z.string().min(1),
+    AUTH_EMAIL_KEY_VERSION: z.string().min(1).max(64),
+    AUTH_TERMS_VERSION: z.string().min(1).max(100),
+    AUTH_PRIVACY_VERSION: z.string().min(1).max(100),
+    AUTH_EMAIL_FROM: z.string().min(3).max(320),
+    RESEND_API_KEY: z.string().min(1).optional(),
+    GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+    GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  })
+  .superRefine((value, context) => {
+    if (Boolean(value.GOOGLE_CLIENT_ID) === Boolean(value.GOOGLE_CLIENT_SECRET)) {
+      return;
+    }
+    context.addIssue({
+      code: "custom",
+      message: "Google OAuth credentials must be configured as a pair",
+    });
+  });
 
 export type IdentityConfig = {
   authSecret: string;
@@ -22,6 +34,10 @@ export type IdentityConfig = {
   privacyVersion: string;
   emailFrom: string;
   resendApiKey?: string;
+  googleOAuth?: {
+    clientId: string;
+    clientSecret: string;
+  };
   trustedProxy: TrustedProxyBoundary;
 };
 
@@ -51,8 +67,21 @@ export function readIdentityConfig(
     privacyVersion: value.AUTH_PRIVACY_VERSION,
     emailFrom: value.AUTH_EMAIL_FROM,
     resendApiKey: value.RESEND_API_KEY,
+    googleOAuth:
+      value.GOOGLE_CLIENT_ID && value.GOOGLE_CLIENT_SECRET
+        ? {
+            clientId: value.GOOGLE_CLIENT_ID,
+            clientSecret: value.GOOGLE_CLIENT_SECRET,
+          }
+        : undefined,
     trustedProxy: input.VERCEL === "1" ? "vercel" : "none",
   };
+}
+
+export function hasGoogleOAuthCredentials(
+  input: Record<string, string | undefined>,
+): boolean {
+  return Boolean(input.GOOGLE_CLIENT_ID && input.GOOGLE_CLIENT_SECRET);
 }
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();

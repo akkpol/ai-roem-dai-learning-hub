@@ -1,4 +1,5 @@
 import { AuthForm } from "../_components/auth-form";
+import { GoogleSignInForm } from "../_components/google-sign-in-form";
 
 import { LinkButton } from "@/components/ui/button";
 import {
@@ -9,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { hasGoogleOAuthCredentials } from "@/modules/identity";
 
 export default function SignInPage() {
   return (
@@ -19,7 +21,10 @@ export default function SignInPage() {
         </CardTitle>
         <CardDescription>กลับเข้าสู่พื้นที่เรียนรู้ของคุณ</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-4">
+        <GoogleSignInForm
+          enabled={hasGoogleOAuthCredentials(process.env)}
+        />
         <AuthForm kind="sign-in" />
       </CardContent>
       <CardFooter className="flex-col gap-2">

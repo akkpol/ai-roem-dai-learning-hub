@@ -40,7 +40,7 @@ export default function HomePage() {
             </LinkButton>
             <LinkButton
               className="w-full sm:w-auto"
-              href="/sign-in"
+              href="/login"
               size="lg"
               variant="outline"
             >

@@ -25,7 +25,7 @@ export default function GoogleSignInErrorPage() {
         </Alert>
       </CardContent>
       <CardFooter>
-        <LinkButton href="/sign-in" className="w-full">
+        <LinkButton href="/login" className="w-full">
           กลับไปหน้าเข้าสู่ระบบ
         </LinkButton>
       </CardFooter>

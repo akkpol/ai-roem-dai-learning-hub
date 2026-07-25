@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -215,9 +216,19 @@ export function AuthForm({
 
         {(kind === "sign-up" || kind === "sign-in" || kind === "reset-password") && (
           <Field data-invalid={Boolean(fieldErrors.password)}>
-            <FieldLabel htmlFor="password">
-              {kind === "reset-password" ? "รหัสผ่านใหม่" : "รหัสผ่าน"}
-            </FieldLabel>
+            <div className="flex items-center">
+              <FieldLabel htmlFor="password">
+                {kind === "reset-password" ? "รหัสผ่านใหม่" : "รหัสผ่าน"}
+              </FieldLabel>
+              {kind === "sign-in" && (
+                <Link
+                  href="/forgot-password"
+                  className="ml-auto text-sm underline-offset-4 hover:underline"
+                >
+                  ลืมรหัสผ่าน?
+                </Link>
+              )}
+            </div>
             <Input
               id="password"
               name={kind === "reset-password" ? "newPassword" : "password"}

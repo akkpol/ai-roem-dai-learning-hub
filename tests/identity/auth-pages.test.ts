@@ -5,17 +5,17 @@ import { describe, expect, it } from "vitest";
 import ForgotPasswordPage from "@/app/(auth)/forgot-password/page";
 import GoogleSignInErrorPage from "@/app/(auth)/sign-in/google-error/page";
 import ResetPasswordPage from "@/app/(auth)/reset-password/page";
-import SignInPage from "@/app/(auth)/sign-in/page";
 import SignUpPage from "@/app/(auth)/sign-up/page";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form";
+import LoginPage from "@/app/login/page";
 
 const render = (Page: ComponentType) => renderToStaticMarkup(createElement(Page));
 
 describe("Public authentication pages", () => {
   it.each([
     [SignUpPage, "สร้างบัญชี"],
-    [SignInPage, "เข้าสู่ระบบ"],
+    [LoginPage, "เข้าสู่ระบบ"],
     [ForgotPasswordPage, "ลืมรหัสผ่าน"],
     [VerifyEmailPage, "ยืนยันอีเมล"],
   ])("renders an accessible Thai page", (Page, heading) => {
@@ -33,7 +33,7 @@ describe("Public authentication pages", () => {
   });
 
   it("offers the same safe deletion-cancellation entry after every sign-in failure", () => {
-    const signIn = render(SignInPage);
+    const signIn = render(LoginPage);
     expect(signIn).toContain("/account/privacy?mode=cancel-deletion");
     expect(signIn).toContain("ยกเลิกคำขอลบบัญชี");
     expect(signIn).not.toContain("บัญชีของคุณอยู่ระหว่างลบ");
@@ -58,7 +58,7 @@ describe("Public authentication pages", () => {
     const errorPage = render(GoogleSignInErrorPage);
 
     expect(errorPage).toContain("เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
-    expect(errorPage).toContain("/sign-in");
+    expect(errorPage).toContain("/login");
     expect(errorPage).not.toContain("client_secret");
     expect(errorPage).not.toContain("state=");
   });

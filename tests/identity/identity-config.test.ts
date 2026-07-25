@@ -28,6 +28,32 @@ describe("Identity configuration", () => {
     );
   });
 
+  it("enables Google OAuth only when both provider credentials are present", () => {
+    const config = readIdentityConfig({
+      ...valid,
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    });
+
+    expect(config.googleOAuth).toEqual({
+      clientId: "google-client-id",
+      clientSecret: "google-client-secret",
+    });
+    expect(readIdentityConfig(valid).googleOAuth).toBeUndefined();
+    expect(() =>
+      readIdentityConfig({
+        ...valid,
+        GOOGLE_CLIENT_ID: "google-client-id",
+      }),
+    ).toThrow("identity configuration is invalid");
+    expect(() =>
+      readIdentityConfig({
+        ...valid,
+        GOOGLE_CLIENT_SECRET: "google-client-secret",
+      }),
+    ).toThrow("identity configuration is invalid");
+  });
+
   it("rejects weak secret and malformed encryption keys without echoing them", () => {
     expect(() =>
       readIdentityConfig({

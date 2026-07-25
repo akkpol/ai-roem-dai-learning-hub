@@ -10,8 +10,10 @@ export type { IdentityRequestContext } from "./service";
 export {
   getAccountHttpHandlers,
   getIdentityAdminHttpHandlers,
+  getGoogleLoginHandlers,
   getIdentityHttpHandlers,
 } from "./runtime";
+export { hasGoogleOAuthCredentials } from "./config";
 export { runIdentityRetention } from "./privacy";
 export {
   authenticateRequest,

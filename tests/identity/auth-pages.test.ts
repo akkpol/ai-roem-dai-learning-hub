@@ -3,10 +3,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import ForgotPasswordPage from "@/app/(auth)/forgot-password/page";
+import GoogleSignInErrorPage from "@/app/(auth)/sign-in/google-error/page";
 import ResetPasswordPage from "@/app/(auth)/reset-password/page";
 import SignInPage from "@/app/(auth)/sign-in/page";
 import SignUpPage from "@/app/(auth)/sign-up/page";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
+import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form";
 
 const render = (Page: ComponentType) => renderToStaticMarkup(createElement(Page));
 
@@ -35,6 +37,30 @@ describe("Public authentication pages", () => {
     expect(signIn).toContain("/account/privacy?mode=cancel-deletion");
     expect(signIn).toContain("ยกเลิกคำขอลบบัญชี");
     expect(signIn).not.toContain("บัญชีของคุณอยู่ระหว่างลบ");
+  });
+
+  it("offers Google login as an explicit existing-account action", () => {
+    const google = renderToStaticMarkup(
+      createElement(GoogleSignInForm, { enabled: true }),
+    );
+
+    expect(google).toContain('action="/api/auth/google"');
+    expect(google).toContain('method="post"');
+    expect(google).toContain("เข้าสู่ระบบด้วย Google");
+    expect(
+      renderToStaticMarkup(
+        createElement(GoogleSignInForm, { enabled: false }),
+      ),
+    ).toBe("");
+  });
+
+  it("uses a generic OAuth failure page without exposing provider details", () => {
+    const errorPage = render(GoogleSignInErrorPage);
+
+    expect(errorPage).toContain("เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+    expect(errorPage).toContain("/sign-in");
+    expect(errorPage).not.toContain("client_secret");
+    expect(errorPage).not.toContain("state=");
   });
 
   it("initializes reset from the emailed query token without a manual token field", async () => {

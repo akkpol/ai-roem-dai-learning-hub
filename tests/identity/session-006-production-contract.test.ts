@@ -31,21 +31,20 @@ describe("SESSION-006 production contract", () => {
     );
   });
 
-  it("declares two Vercel GET cron schedules without account parameters", () => {
-    const scheduler = JSON.parse(source("vercel.json")) as {
-      crons: Array<{ path: string; schedule: string }>;
+  it("uses a free external scheduler without a Vercel Cron plan dependency", () => {
+    const vercel = JSON.parse(source("vercel.json")) as {
+      crons?: Array<unknown>;
     };
-    expect(scheduler.crons).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: "/api/jobs/identity/email-delivery",
-        }),
-        expect.objectContaining({ path: "/api/jobs/identity/retention" }),
-      ]),
-    );
-    expect(scheduler.crons.every(({ path: value }) => !value.includes("?"))).toBe(
-      true,
-    );
+    expect(vercel.crons).toBeUndefined();
+
+    const scheduler = source(".github/workflows/identity-jobs.yml");
+    expect(scheduler).toContain('cron: "2/5 * * * *"');
+    expect(scheduler).toContain('cron: "17 2 * * *"');
+    expect(scheduler).toContain("vars.IDENTITY_JOBS_BASE_URL");
+    expect(scheduler).toContain("secrets.CRON_SECRET");
+    expect(scheduler).toContain("/api/jobs/identity/email-delivery");
+    expect(scheduler).toContain("/api/jobs/identity/retention");
+    expect(scheduler).not.toContain("?account");
   });
 
   it("exposes only POST for the signed webhook and only GET for jobs", () => {

@@ -91,22 +91,38 @@ idempotency failures with bounded exponential backoff, and purges encrypted
 payloads on sent, expired, or dead-letter terminal states. Permanent provider
 validation/auth/domain failures dead-letter instead of hot-looping.
 
-## 5. Vercel Cron scheduler
+## 5. GitHub Actions scheduler
 
-`vercel.json` schedules:
+`.github/workflows/identity-jobs.yml` invokes:
 
-- `/api/jobs/identity/email-delivery` every five minutes;
-- `/api/jobs/identity/retention` daily at 02:15 UTC.
+- `/api/jobs/identity/email-delivery` every five minutes, offset to minute 2;
+- `/api/jobs/identity/retention` daily at 02:17 UTC.
 
 Both routes are GET-only, accept no query parameters or account identifier, and
 require `Authorization: Bearer <CRON_SECRET>`. Jobs are idempotent and tolerate
 duplicate/concurrent scheduler delivery.
 
-Vercel Cron runs Production only. A five-minute schedule requires a Vercel plan
-that supports sub-daily cron. If the active plan does not, deployment
-acceptance is `BLOCKED`: upgrade the plan or select an approved external
-scheduler before enabling real authentication email. A manual protected GET
-proves route behavior, not production scheduler execution.
+Scheduled GitHub Actions run only from the latest commit on the repository
+default branch. Configure these repository settings after the application
+Production deployment is ready:
+
+- variable `IDENTITY_JOBS_BASE_URL`: the canonical HTTPS Production origin,
+  without `/api` or credentials;
+- secret `CRON_SECRET`: the exact same 32–256 character value configured in
+  Vercel Production;
+- variable `IDENTITY_EMAIL_DISPATCH_ENABLED=true`;
+- variable `IDENTITY_RETENTION_ENABLED=true`.
+
+Keep both enable variables false or absent until the matching database roles,
+Resend configuration, and Production readiness check pass. Use
+`workflow_dispatch` to invoke one job after merge, then verify the response and
+application telemetry before enabling schedules.
+
+GitHub documents five minutes as the shortest schedule interval and warns that
+scheduled runs can be delayed or dropped during high load. The workflow offsets
+execution from minute zero, while application leases, idempotency, retry, and
+oldest-pending-age monitoring remain the reliability controls. A manual
+protected GET proves route behavior, not scheduler execution.
 
 ## 6. First admin and normal role operations
 
@@ -169,7 +185,7 @@ never raw email labels.
 
 For email backlog:
 
-1. Disable only the dispatch cron if repeated sends are possible.
+1. Set `IDENTITY_EMAIL_DISPATCH_ENABLED=false` if repeated sends are possible.
 2. Inspect state counts and lease expiry without decrypting payloads.
 3. Confirm provider/domain health and credential validity.
 4. Re-enable dispatch; expired leases are reclaimed and provider idempotency
@@ -201,7 +217,7 @@ acceptance separately records:
   `npm run test:e2e:identity-operations`;
 - verified Resend domain, signed webhook events, retry/dead-letter behavior,
   and payload purge;
-- Vercel Production cron execution logs;
+- GitHub Actions Production scheduler logs for both jobs;
 - two independent platform admins and the break-glass tabletop result.
 
 Use exact `PASS`, `FAIL`, `NOT RUN`, or `BLOCKED` for each item. Missing provider

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertRelativeCallbackPath,
   normalizeEmail,
+  readCoreAuthConfig,
   readIdentityConfig,
 } from "@/modules/identity/config";
 
@@ -17,6 +18,70 @@ const valid = {
 };
 
 describe("Identity configuration", () => {
+  it("reads only core auth settings for Google existing-account login", () => {
+    const coreOnly = {
+      AUTH_SECRET: "a".repeat(32),
+      AUTH_BASE_URL: "https://learning.example.test/api/auth",
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    };
+
+    expect(readCoreAuthConfig(coreOnly)).toEqual({
+      authSecret: "a".repeat(32),
+      baseUrl: "https://learning.example.test/api/auth",
+      googleOAuth: {
+        clientId: "google-client-id",
+        clientSecret: "google-client-secret",
+      },
+      trustedProxy: "none",
+    });
+    expect(
+      readCoreAuthConfig({ ...coreOnly, VERCEL: "1" }).trustedProxy,
+    ).toBe("vercel");
+    expect(
+      readCoreAuthConfig({
+        AUTH_SECRET: coreOnly.AUTH_SECRET,
+        AUTH_BASE_URL: coreOnly.AUTH_BASE_URL,
+      }).googleOAuth,
+    ).toBeUndefined();
+
+    // Full identity routes keep their existing fail-closed requirements.
+    expect(() => readIdentityConfig(coreOnly)).toThrow(
+      "identity configuration is invalid",
+    );
+  });
+
+  it("keeps core auth secrets, base URL, and Google credential pairing strict", () => {
+    const coreOnly = {
+      AUTH_SECRET: "a".repeat(32),
+      AUTH_BASE_URL: "https://learning.example.test/api/auth",
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    };
+
+    expect(() =>
+      readCoreAuthConfig({ ...coreOnly, AUTH_SECRET: "weak" }),
+    ).toThrow("identity configuration is invalid");
+    expect(() =>
+      readCoreAuthConfig({
+        ...coreOnly,
+        AUTH_BASE_URL: "https://learning.example.test/not-auth",
+      }),
+    ).toThrow("identity configuration is invalid");
+    expect(() =>
+      readCoreAuthConfig({
+        ...coreOnly,
+        GOOGLE_CLIENT_SECRET: undefined,
+      }),
+    ).toThrow("identity configuration is invalid");
+    expect(() =>
+      readCoreAuthConfig({
+        ...coreOnly,
+        GOOGLE_CLIENT_ID: undefined,
+      }),
+    ).toThrow("identity configuration is invalid");
+  });
+
   it("reads validated auth and policy configuration", () => {
     const config = readIdentityConfig(valid);
     expect(config.authSecret).toHaveLength(32);

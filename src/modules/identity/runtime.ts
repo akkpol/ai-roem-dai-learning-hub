@@ -1,6 +1,6 @@
 import { getRuntimeDatabaseConnection } from "@/platform/database/client";
 
-import { readIdentityConfig } from "./config";
+import { readCoreAuthConfig, readIdentityConfig } from "./config";
 import { createAuthHttpHandlers } from "./http";
 import { createAccountHttpHandlers } from "./account-http";
 import { createAccountSecurityService } from "./account-security";
@@ -30,7 +30,7 @@ export function getIdentityHttpHandlers() {
 }
 
 export function getGoogleLoginHandlers() {
-  const config = readIdentityConfig(process.env);
+  const config = readCoreAuthConfig(process.env);
   const { db } = getRuntimeDatabaseConnection();
   return createGoogleLoginHandlers(db, config);
 }

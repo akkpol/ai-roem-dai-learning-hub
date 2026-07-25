@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
         <AuthForm kind="forgot-password" />
       </CardContent>
       <CardFooter>
-        <LinkButton href="/sign-in" variant="outline" className="w-full">
+        <LinkButton href="/login" variant="outline" className="w-full">
           กลับไปเข้าสู่ระบบ
         </LinkButton>
       </CardFooter>

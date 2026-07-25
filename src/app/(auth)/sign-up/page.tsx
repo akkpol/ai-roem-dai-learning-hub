@@ -29,7 +29,7 @@ export default function SignUpPage() {
       </CardContent>
       <CardFooter className="flex-col gap-2">
         <CardDescription>มีบัญชีอยู่แล้ว?</CardDescription>
-        <LinkButton href="/sign-in" variant="outline" className="w-full">
+        <LinkButton href="/login" variant="outline" className="w-full">
           เข้าสู่ระบบ
         </LinkButton>
       </CardFooter>

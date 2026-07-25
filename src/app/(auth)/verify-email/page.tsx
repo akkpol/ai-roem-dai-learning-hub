@@ -25,7 +25,7 @@ export default function VerifyEmailPage() {
         </CardDescription>
       </CardHeader>
       <CardFooter className="flex-col gap-2">
-        <LinkButton href="/sign-in" className="w-full">
+        <LinkButton href="/login" className="w-full">
           ไปหน้าเข้าสู่ระบบ
         </LinkButton>
         <LinkButton href="/sign-up" variant="link">

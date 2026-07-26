@@ -34,6 +34,26 @@ function sameOrigin(request: Request, config: GoogleAuthConfig): boolean {
   return request.headers.get("origin") === new URL(config.baseUrl).origin;
 }
 
+function normalizeGoogleStartResponse(response: Response): Response {
+  const location = response.headers.get("location");
+  if (!location) return response;
+
+  const target = new URL(location);
+  if (
+    target.protocol !== "https:" ||
+    target.hostname !== "accounts.google.com"
+  ) {
+    throw new Error("Google OAuth redirect target is invalid");
+  }
+  if (response.status < 200 || response.status >= 300) return response;
+
+  const headers = new Headers(response.headers);
+  headers.delete("content-length");
+  headers.delete("content-type");
+  headers.set("location", target.href);
+  return new Response(null, { status: 303, headers });
+}
+
 function isSuccessfulCallback(response: Response, config: GoogleAuthConfig) {
   const location = response.headers.get("location");
   if (!location || response.status < 300 || response.status >= 400) return false;
@@ -177,7 +197,7 @@ export function createGoogleLoginHandlers(
             config,
             inertCallbacks,
           );
-          return await auth.api.signInSocial({
+          const response = await auth.api.signInSocial({
             body: {
               provider: "google",
               requestSignUp: true,
@@ -192,6 +212,7 @@ export function createGoogleLoginHandlers(
             headers: request.headers,
             asResponse: true,
           });
+          return normalizeGoogleStartResponse(response);
         });
       } catch {
         return Response.redirect(

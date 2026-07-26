@@ -5,6 +5,10 @@ import {
   type AppDatabase,
 } from "@/platform/database/client";
 import type { DatabaseTransaction } from "@/platform/database/transaction";
+import {
+  emitStructuredTelemetry,
+  type Telemetry,
+} from "@/platform/observability/telemetry";
 
 import { createTransactionAuth } from "./auth";
 import { readIdentityConfig, type IdentityConfig } from "./config";
@@ -219,7 +223,21 @@ export async function loadCurrentActor(
 export function createIdentityAuthorizationService(
   database: AppDatabase,
   config: IdentityConfig,
+  telemetry?: Telemetry,
 ) {
+  const recordDenied = (
+    input: AuthorizationInput,
+    decision: AuthorizationDecision,
+  ) => {
+    if (!decision.allowed) {
+      telemetry?.("identity.authorization.denied", {
+        action: input.permission,
+        reason: decision.reason,
+        count: 1,
+      });
+    }
+    return decision;
+  };
   return {
     authenticateRequest: (request: Request): Promise<Actor | null> =>
       database.transaction(async (transaction) => {
@@ -251,15 +269,19 @@ export function createIdentityAuthorizationService(
     authorize: (input: AuthorizationInput): Promise<AuthorizationDecision> =>
       database.transaction(async (transaction) => {
         const current = await loadCurrentActor(transaction, input.actor);
-        if (!current) return deny("account_inactive");
-        return evaluateAuthorization({ ...input, actor: current });
+        const decision = !current
+          ? deny("account_inactive")
+          : evaluateAuthorization({ ...input, actor: current });
+        return recordDenied(input, decision);
       }),
 
     requirePermission: async (input: AuthorizationInput): Promise<void> => {
       const decision = await database.transaction(async (transaction) => {
         const current = await loadCurrentActor(transaction, input.actor);
-        if (!current) return deny("account_inactive");
-        return evaluateAuthorization({ ...input, actor: current });
+        const decision = !current
+          ? deny("account_inactive")
+          : evaluateAuthorization({ ...input, actor: current });
+        return recordDenied(input, decision);
       });
       if (!decision.allowed) throw new Error("permission denied");
     },
@@ -268,7 +290,11 @@ export function createIdentityAuthorizationService(
 
 function runtimeService() {
   const { db } = getRuntimeDatabaseConnection();
-  return createIdentityAuthorizationService(db, readIdentityConfig(process.env));
+  return createIdentityAuthorizationService(
+    db,
+    readIdentityConfig(process.env),
+    emitStructuredTelemetry,
+  );
 }
 
 export function authenticateRequest(request: Request): Promise<Actor | null> {

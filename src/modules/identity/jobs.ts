@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 
 import { z } from "zod";
 
+import { requestCorrelationId } from "@/platform/observability/telemetry";
+
 const cronEnvironment = z.object({
   CRON_SECRET: z.string().min(32).max(256),
 });
@@ -61,14 +63,17 @@ export function createIdentityJobHandlers(input: {
     request: Request,
     job: "email_delivery" | "retention",
   ): Promise<Response> => {
+    const correlationId = requestCorrelationId(request);
     const authorization = authorizeCronRequest(request, input.cronSecret);
     if (!authorization.allowed) {
       return Response.json(
         { error: "job_request_rejected" },
         {
           status: authorization.status,
-          headers:
-            authorization.status === 405 ? { Allow: "GET" } : undefined,
+          headers: {
+            ...(authorization.status === 405 ? { Allow: "GET" } : {}),
+            "x-correlation-id": correlationId,
+          },
         },
       );
     }
@@ -80,16 +85,58 @@ export function createIdentityJobHandlers(input: {
           : await input.runRetention();
       input.telemetry?.("identity.job.completed", {
         job,
+        correlationId,
         durationMs: Date.now() - startedAt,
+        ...Object.fromEntries(
+          Object.entries(result).filter(
+            (entry): entry is [string, number] =>
+              typeof entry[1] === "number" && Number.isFinite(entry[1]),
+          ),
+        ),
       });
-      return Response.json({ status: "completed", result });
+      if (
+        job === "email_delivery" &&
+        "requiresAttention" in result &&
+        result.requiresAttention === 1
+      ) {
+        input.telemetry?.("identity.job.requires_attention", {
+          job,
+          correlationId,
+          oldestPendingAgeMs:
+            typeof result.oldestPendingAgeMs === "number"
+              ? result.oldestPendingAgeMs
+              : 0,
+          deadLetterCount:
+            typeof result.deadLetterCount === "number"
+              ? result.deadLetterCount
+              : 0,
+        });
+        return Response.json(
+          { error: "job_requires_attention", result },
+          {
+            status: 503,
+            headers: { "x-correlation-id": correlationId },
+          },
+        );
+      }
+      return Response.json(
+        { status: "completed", result },
+        { headers: { "x-correlation-id": correlationId } },
+      );
     } catch (error) {
       input.telemetry?.("identity.job.failed", {
         job,
+        correlationId,
         durationMs: Date.now() - startedAt,
         errorName: error instanceof Error ? error.name.slice(0, 64) : "unknown",
       });
-      return Response.json({ error: "job_failed" }, { status: 503 });
+      return Response.json(
+        { error: "job_failed" },
+        {
+          status: 503,
+          headers: { "x-correlation-id": correlationId },
+        },
+      );
     }
   };
   return {

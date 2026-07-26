@@ -46,6 +46,11 @@ export type AuthEmailOutboxRepository = {
     leaseToken: string;
     expiredAt: Date;
   }): Promise<void>;
+  measureBacklog?(now: Date): Promise<{
+    oldestPendingAgeMs: number;
+    retryWaitCount: number;
+    deadLetterCount: number;
+  }>;
 };
 
 type RetryDecision =
@@ -111,6 +116,10 @@ export function createAuthEmailDispatcher(input: {
       retried: number;
       deadLettered: number;
       expired: number;
+      oldestPendingAgeMs?: number;
+      retryWaitCount?: number;
+      deadLetterCount?: number;
+      requiresAttention?: number;
     }> {
       if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
         throw new Error("email dispatch batch limit is invalid");
@@ -211,7 +220,26 @@ export function createAuthEmailDispatcher(input: {
           }
         }
       }
-      return summary;
+      if (!input.repository.measureBacklog) return summary;
+      const backlog = await input.repository.measureBacklog(now());
+      const requiresAttention =
+        backlog.oldestPendingAgeMs > 15 * 60_000 ||
+        backlog.deadLetterCount > 0;
+      input.telemetry?.("identity.email_outbox.metrics", {
+        ...backlog,
+        requiresAttention,
+      });
+      if (requiresAttention) {
+        input.telemetry?.("identity.email_outbox.alert", {
+          ...backlog,
+          deadLetteredThisBatch: summary.deadLettered,
+        });
+      }
+      return {
+        ...summary,
+        ...backlog,
+        requiresAttention: requiresAttention ? 1 : 0,
+      };
     },
   };
 }
@@ -225,6 +253,33 @@ export function createPostgresAuthEmailOutboxRepository(
   leaseMs = 5 * 60_000,
 ): AuthEmailOutboxRepository {
   return {
+    measureBacklog: async (now) => {
+      const result = await database.execute<{
+        oldestPendingAt: Date | string | null;
+        retryWaitCount: number | string;
+        deadLetterCount: number | string;
+      }>(sql`
+        select
+          min(created_at) filter (
+            where state in ('pending', 'sending', 'retry_wait')
+          ) as "oldestPendingAt",
+          count(*) filter (where state = 'retry_wait') as "retryWaitCount",
+          count(*) filter (where state = 'dead_letter') as "deadLetterCount"
+        from identity_email_outbox
+      `);
+      const row = result.rows[0];
+      const oldestPendingAt = row?.oldestPendingAt
+        ? new Date(row.oldestPendingAt)
+        : null;
+      return {
+        oldestPendingAgeMs:
+          oldestPendingAt && !Number.isNaN(oldestPendingAt.getTime())
+            ? Math.max(0, now.getTime() - oldestPendingAt.getTime())
+            : 0,
+        retryWaitCount: Number(row?.retryWaitCount ?? 0),
+        deadLetterCount: Number(row?.deadLetterCount ?? 0),
+      };
+    },
     expireStale: async ({ now, limit }) =>
       database.transaction(async (transaction) => {
         const result = await transaction.execute<{ id: string }>(sql`

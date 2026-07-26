@@ -38,6 +38,7 @@ export type TransactionAuthCallbacks = {
 
 export type TransactionAuthOptions = {
   googleOAuthCallback?: boolean;
+  allowDeletionCancellation?: boolean;
 };
 
 export function createTransactionAuth(
@@ -100,7 +101,9 @@ export function createTransactionAuth(
               .from(identityAccounts)
               .where(eq(identityAccounts.id, session.userId));
             const sessionAllowed =
-              account[0]?.status === "active" &&
+              (account[0]?.status === "active" ||
+                (options.allowDeletionCancellation === true &&
+                  account[0]?.status === "deletion_scheduled")) &&
               (!options.googleOAuthCallback ||
                 account[0]?.twoFactorEnabled === false);
             if (!sessionAllowed) return false;

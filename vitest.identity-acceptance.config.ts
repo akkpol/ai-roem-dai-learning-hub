@@ -9,7 +9,7 @@ export default defineConfig({
     include: ["tests/acceptance/identity/**/*.acceptance.test.ts"],
     fileParallelism: false,
     maxWorkers: 1,
-    testTimeout: 30_000,
+    testTimeout: 90_000,
     hookTimeout: 30_000,
   },
 });

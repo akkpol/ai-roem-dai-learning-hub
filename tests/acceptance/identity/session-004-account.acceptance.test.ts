@@ -12,7 +12,9 @@ import { createIdentityPrivacyService } from "@/modules/identity/privacy";
 import { createIdentityService } from "@/modules/identity/service";
 import {
   identityAccounts,
+  identityAccountDeletionRequests,
   identityEmailOutbox,
+  identityGlobalRoleGrants,
 } from "@/modules/identity/schema";
 
 const config = {
@@ -27,12 +29,22 @@ const config = {
 };
 
 let connection: DatabaseConnection;
+let operatorConnection: DatabaseConnection;
 
 beforeAll(() => {
   connection = createDatabaseConnection(readDatabaseConfig(process.env));
+  operatorConnection = createDatabaseConnection(
+    readDatabaseConfig({
+      ...process.env,
+      DATABASE_URL: process.env.MIGRATION_DATABASE_URL,
+    }),
+  );
 });
 
-afterAll(async () => connection.close());
+afterAll(async () => {
+  await connection.close();
+  await operatorConnection.close();
+});
 
 function sessionHeaders(headers: Headers) {
   const values = headers.getSetCookie();
@@ -113,6 +125,11 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
     .from(identityAccounts)
     .where(eq(identityAccounts.email, email));
   const accountId = account[0]!.id;
+  await operatorConnection.db.insert(identityGlobalRoleGrants).values({
+    accountId,
+    role: "reviewer",
+    reasonCode: "acceptance_export",
+  });
   await identity.verifyEmail((await latestIntent(accountId, "verify_email")).token);
   const signedIn = await identity.signIn(
     parseSignInCommand({ email, password, callbackPath: "/" }),
@@ -168,6 +185,9 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
     code: currentTotp(enrollment.totpURI),
   });
   expect(exported.account).toMatchObject({ id: accountId, email, twoFactorEnabled: true });
+  expect(exported.activeRoleGrants).toEqual([
+    expect.objectContaining({ role: "reviewer" }),
+  ]);
   expect(JSON.stringify(exported)).not.toContain("correct-horse");
 
   await privacy.requestDeletion(headers, newPassword, {
@@ -193,6 +213,21 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
   );
   expect(scheduledSignIn).toMatchObject({ status: 401, body: unknownSignIn.body });
   expect(scheduledSignIn.headers.get("set-cookie")).toBeNull();
+  await connection.db
+    .update(identityAccountDeletionRequests)
+    .set({ scheduledFor: new Date(Date.now() - 1) })
+    .where(eq(identityAccountDeletionRequests.accountId, accountId));
+  await expect(
+    privacy.cancelDeletion(new Headers(), {
+      email,
+      password: newPassword,
+      proof: { kind: "totp", code: currentTotp(enrollment.totpURI) },
+    }),
+  ).rejects.toThrow("cancellation request is unavailable");
+  await connection.db
+    .update(identityAccountDeletionRequests)
+    .set({ scheduledFor: new Date(Date.now() + 60_000) })
+    .where(eq(identityAccountDeletionRequests.accountId, accountId));
   const cancelled = await privacy.cancelDeletion(new Headers(), {
     email,
     password: newPassword,

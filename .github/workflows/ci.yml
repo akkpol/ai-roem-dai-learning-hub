@@ -66,6 +66,11 @@ jobs:
           NEON_ENDPOINT_ID: ${{ vars.NEON_SESSION_002_ENDPOINT_ID }}
           NEON_ENDPOINT_HOSTNAME: ${{ vars.NEON_SESSION_002_MIGRATION_ENDPOINT_HOSTNAME }}
           NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+          AUTH_SECRET: ci-identity-acceptance-secret-000000
+          AUTH_BASE_URL: https://learning.example.test/api/auth
+          AUTH_EMAIL_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          AUTH_EMAIL_KEY_VERSION: ci-v1
+          AUTH_EMAIL_FROM: identity-acceptance@example.test
         shell: bash
         run: |
           test -n "$DATABASE_URL"
@@ -96,6 +101,7 @@ jobs:
           npx tsx scripts/database/provider-preflight.ts
           npm run db:migrate
           npm run test:integration
+          npm run test:identity-acceptance
       - name: Application HTTP smoke test
         if: steps.scope.outputs.code == 'true'
         shell: bash

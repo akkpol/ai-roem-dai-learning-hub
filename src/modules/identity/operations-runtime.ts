@@ -7,6 +7,7 @@ import {
   type DatabaseConnection,
 } from "@/platform/database/client";
 import { readDatabaseConfig } from "@/platform/database/config";
+import { emitStructuredTelemetry } from "@/platform/observability/telemetry";
 
 import { readIdentityConfig } from "./config";
 import { decryptAuthEmailIntent } from "./email/crypto";
@@ -61,17 +62,10 @@ export function probeIdentityOperationsConfiguration(
   }
 }
 
-function telemetry(
-  event: string,
-  fields: Record<string, string | number | boolean>,
-) {
-  console.info(event, fields);
-}
-
 export function getIdentityJobHandlers() {
   return createIdentityJobHandlers({
     cronSecret: readCronSecret(process.env),
-    telemetry,
+    telemetry: emitStructuredTelemetry,
     dispatchEmail: async () => {
       const config = readIdentityConfig(process.env);
       if (!config.resendApiKey) {
@@ -90,7 +84,7 @@ export function getIdentityJobHandlers() {
           decrypt: (payload) =>
             decryptAuthEmailIntent(payload, config.emailEncryptionKey),
           workerId: `vercel:${process.env.VERCEL_REGION ?? "unknown"}:${randomUUID()}`,
-          telemetry,
+          telemetry: emitStructuredTelemetry,
         }).runBatch(50);
       } finally {
         await connection.close();
@@ -154,6 +148,6 @@ export async function handleResendWebhookRequest(
         close: () => connection.close(),
       };
     },
-    telemetry,
+    telemetry: emitStructuredTelemetry,
   })(request);
 }

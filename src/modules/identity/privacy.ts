@@ -1,6 +1,16 @@
 import { createHmac, randomBytes } from "node:crypto";
 
-import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { AppDatabase } from "@/platform/database/client";
 import { enqueueDomainEvent } from "@/platform/events";
@@ -18,6 +28,7 @@ import {
   identityAuthFactors,
   identityEmailDeliveries,
   identityEmailOutbox,
+  identityGlobalRoleGrants,
   identityPolicyAcceptances,
   identityProfiles,
   identityRateLimits,
@@ -101,6 +112,7 @@ export function createIdentityPrivacyService(
     exportOwnIdentity: (headers: Headers, proof?: SecondFactorProof) =>
       database.transaction(async (transaction) => {
         const { account, session } = await requireActive(transaction, headers, true);
+        const exportedAt = new Date();
         if (account.twoFactorEnabled) {
           if (!proof) throw new Error("second factor required");
           await verifySecondFactor(
@@ -136,8 +148,27 @@ export function createIdentityPrivacyService(
           .from(identityAuditEvents)
           .where(eq(identityAuditEvents.accountId, account.id))
           .orderBy(asc(identityAuditEvents.occurredAt));
+        const activeRoleGrants = await transaction
+          .select({
+            role: identityGlobalRoleGrants.role,
+            startsAt: identityGlobalRoleGrants.startsAt,
+            expiresAt: identityGlobalRoleGrants.expiresAt,
+          })
+          .from(identityGlobalRoleGrants)
+          .where(
+            and(
+              eq(identityGlobalRoleGrants.accountId, account.id),
+              isNull(identityGlobalRoleGrants.revokedAt),
+              lte(identityGlobalRoleGrants.startsAt, exportedAt),
+              or(
+                isNull(identityGlobalRoleGrants.expiresAt),
+                gt(identityGlobalRoleGrants.expiresAt, exportedAt),
+              ),
+            ),
+          )
+          .orderBy(asc(identityGlobalRoleGrants.role));
         return {
-          exportedAt: new Date().toISOString(),
+          exportedAt: exportedAt.toISOString(),
           account: {
             id: account.id,
             email: account.email,
@@ -146,7 +177,7 @@ export function createIdentityPrivacyService(
           },
           profile: profiles[0] ?? null,
           policyAcceptances: policies,
-          activeRoleGrants: [],
+          activeRoleGrants,
           auditEvents: audits,
           session: { id: session.session.id },
         };
@@ -333,7 +364,12 @@ export function createIdentityPrivacyService(
           )
           .for("update");
         if (!requests[0]) throw new Error("cancellation request is unavailable");
-        const auth = createTransactionAuth(transaction, config, inertCallbacks());
+        const auth = createTransactionAuth(
+          transaction,
+          config,
+          inertCallbacks(),
+          { allowDeletionCancellation: true },
+        );
         const signedIn = await auth.api.signInEmail({
           body: { email: command.email, password: command.password },
           headers,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   authorizeCronRequest,
+  createIdentityJobHandlers,
   readCronSecret,
 } from "@/modules/identity/jobs";
 
@@ -49,5 +50,32 @@ describe("SESSION-006 scheduler boundary", () => {
         secret,
       ),
     ).toEqual({ allowed: false, status: 401 });
+  });
+
+  it("turns an unhealthy email backlog into a scheduler-visible failure", async () => {
+    const secret = "s".repeat(32);
+    const handlers = createIdentityJobHandlers({
+      cronSecret: secret,
+      dispatchEmail: async () => ({
+        requiresAttention: 1,
+        oldestPendingAgeMs: 960_000,
+        deadLetterCount: 0,
+      }),
+      runRetention: async () => ({}),
+    });
+    const response = await handlers.dispatchEmail(
+      new Request("https://example.test/api/jobs/identity/email-delivery", {
+        headers: {
+          authorization: `Bearer ${secret}`,
+          "x-correlation-id": "email-job-test-1",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("x-correlation-id")).toBe("email-job-test-1");
+    await expect(response.json()).resolves.toMatchObject({
+      error: "job_requires_attention",
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createReadyHandler } from "@/app/api/health/ready/route";
 
@@ -61,5 +61,29 @@ describe("database readiness", () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain("secret-value");
+  });
+
+  it("emits bounded database readiness latency with a correlation ID", async () => {
+    const telemetry = vi.fn();
+    const clock = [100, 135];
+    const GET = createReadyHandler(
+      async () => undefined,
+      async () => undefined,
+      telemetry,
+      () => clock.shift() ?? 135,
+    );
+
+    const response = await GET(
+      new Request("https://example.test/api/health/ready", {
+        headers: { "x-correlation-id": "ready-test-1" },
+      }),
+    );
+
+    expect(response.headers.get("x-correlation-id")).toBe("ready-test-1");
+    expect(telemetry).toHaveBeenCalledWith("platform.database.readiness", {
+      correlationId: "ready-test-1",
+      durationMs: 35,
+      ready: true,
+    });
   });
 });

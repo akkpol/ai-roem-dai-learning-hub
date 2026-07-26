@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { AppDatabase } from "@/platform/database/client";
+import { requestCorrelationId } from "@/platform/observability/telemetry";
 
 import {
   identityEmailDeliveries,
@@ -46,10 +47,6 @@ const deliveryState: Partial<Record<string, NormalizedDeliveryState>> = {
   "email.suppressed": "failed",
 };
 
-function json(status: number, body: Record<string, unknown>) {
-  return Response.json(body, { status });
-}
-
 export function createResendWebhookHandler(input: {
   verifier: ResendWebhookVerifier;
   ledger:
@@ -66,14 +63,21 @@ export function createResendWebhookHandler(input: {
 }) {
   const now = input.now ?? (() => new Date());
   return async (request: Request): Promise<Response> => {
+    const correlationId = requestCorrelationId(request);
+    const respond = (status: number, body: Record<string, unknown>) =>
+      Response.json(body, {
+        status,
+        headers: { "x-correlation-id": correlationId },
+      });
     const id = request.headers.get("svix-id");
     const timestamp = request.headers.get("svix-timestamp");
     const signature = request.headers.get("svix-signature");
     if (!id || !timestamp || !signature) {
       input.telemetry?.("identity.webhook.rejected", {
+        correlationId,
         reason: "missing_signature_headers",
       });
-      return json(400, { error: "webhook signature headers are required" });
+      return respond(400, { error: "webhook signature headers are required" });
     }
     let event: VerifiedResendEvent;
     try {
@@ -81,16 +85,18 @@ export function createResendWebhookHandler(input: {
       event = input.verifier.verify(rawBody, { id, timestamp, signature });
     } catch {
       input.telemetry?.("identity.webhook.rejected", {
+        correlationId,
         reason: "signature_verification_failed",
       });
-      return json(400, { error: "webhook signature is invalid" });
+      return respond(400, { error: "webhook signature is invalid" });
     }
     const state = deliveryState[event.type];
     if (!state) {
       input.telemetry?.("identity.webhook.ignored", {
+        correlationId,
         eventType: event.type.slice(0, 64),
       });
-      return json(200, { status: "ignored" });
+      return respond(200, { status: "ignored" });
     }
     const providerCreatedAt = new Date(event.createdAt);
     if (
@@ -99,9 +105,10 @@ export function createResendWebhookHandler(input: {
       Number.isNaN(providerCreatedAt.getTime())
     ) {
       input.telemetry?.("identity.webhook.rejected", {
+        correlationId,
         reason: "invalid_event",
       });
-      return json(400, { error: "webhook event is invalid" });
+      return respond(400, { error: "webhook event is invalid" });
     }
     const resource =
       typeof input.ledger === "function"
@@ -116,10 +123,13 @@ export function createResendWebhookHandler(input: {
         receivedAt: now(),
       });
       input.telemetry?.("identity.webhook.recorded", {
+        correlationId,
         state,
         duplicate: result.duplicate,
       });
-      return json(200, { status: result.duplicate ? "duplicate" : "processed" });
+      return respond(200, {
+        status: result.duplicate ? "duplicate" : "processed",
+      });
     } finally {
       await resource.close?.();
     }

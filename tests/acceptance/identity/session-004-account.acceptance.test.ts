@@ -13,6 +13,7 @@ import { createIdentityService } from "@/modules/identity/service";
 import {
   identityAccounts,
   identityEmailOutbox,
+  identityGlobalRoleGrants,
 } from "@/modules/identity/schema";
 
 const config = {
@@ -113,6 +114,11 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
     .from(identityAccounts)
     .where(eq(identityAccounts.email, email));
   const accountId = account[0]!.id;
+  await connection.db.insert(identityGlobalRoleGrants).values({
+    accountId,
+    role: "reviewer",
+    reasonCode: "acceptance_export",
+  });
   await identity.verifyEmail((await latestIntent(accountId, "verify_email")).token);
   const signedIn = await identity.signIn(
     parseSignInCommand({ email, password, callbackPath: "/" }),
@@ -168,6 +174,9 @@ it("updates profile and password, enables 2FA, exports, schedules and cancels de
     code: currentTotp(enrollment.totpURI),
   });
   expect(exported.account).toMatchObject({ id: accountId, email, twoFactorEnabled: true });
+  expect(exported.activeRoleGrants).toEqual([
+    expect.objectContaining({ role: "reviewer" }),
+  ]);
   expect(JSON.stringify(exported)).not.toContain("correct-horse");
 
   await privacy.requestDeletion(headers, newPassword, {

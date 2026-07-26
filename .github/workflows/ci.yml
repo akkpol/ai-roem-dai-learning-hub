@@ -96,6 +96,7 @@ jobs:
           npx tsx scripts/database/provider-preflight.ts
           npm run db:migrate
           npm run test:integration
+          npm run test:identity-acceptance
       - name: Application HTTP smoke test
         if: steps.scope.outputs.code == 'true'
         shell: bash

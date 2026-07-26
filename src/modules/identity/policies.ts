@@ -5,4 +5,3 @@ export const currentIdentityPolicies = Object.freeze({
   privacyUrl: "/privacy",
   effectiveDate: "26 กรกฎาคม 2569",
 });
-

@@ -1,4 +1,5 @@
 import { getRuntimeDatabaseConnection } from "@/platform/database/client";
+import { emitStructuredTelemetry } from "@/platform/observability/telemetry";
 
 import { readCoreAuthConfig, readIdentityConfig } from "./config";
 import { createAuthHttpHandlers } from "./http";
@@ -51,7 +52,11 @@ export function getIdentityAdminHttpHandlers() {
   const authorization = createIdentityAuthorizationService(db, config);
   return createIdentityAdminHttpHandlers({
     authenticate: authorization.authenticateRequest,
-    administration: createIdentityAdministrationService(db),
+    administration: createIdentityAdministrationService(
+      db,
+      undefined,
+      emitStructuredTelemetry,
+    ),
     trustedOrigin: new URL(config.baseUrl).origin,
   });
 }

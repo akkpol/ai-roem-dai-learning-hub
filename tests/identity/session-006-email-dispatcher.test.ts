@@ -171,13 +171,13 @@ describe("SESSION-006 authentication email dispatcher", () => {
     expect(sender.send).not.toHaveBeenCalled();
   });
 
-  it("reports actionable backlog metrics after a batch", async () => {
+  it("keeps a persisted dead letter visible to scheduler retries", async () => {
     const repo = repository({
       claimBatch: vi.fn(async () => []),
       measureBacklog: vi.fn(async () => ({
-        oldestPendingAgeMs: 16 * 60_000,
+        oldestPendingAgeMs: 0,
         retryWaitCount: 2,
-        deadLetterCount: 0,
+        deadLetterCount: 1,
       })),
     });
     const telemetry = vi.fn();
@@ -191,14 +191,14 @@ describe("SESSION-006 authentication email dispatcher", () => {
     }).runBatch(10);
 
     expect(result).toMatchObject({
-      oldestPendingAgeMs: 16 * 60_000,
+      oldestPendingAgeMs: 0,
       retryWaitCount: 2,
-      deadLetterCount: 0,
+      deadLetterCount: 1,
       requiresAttention: 1,
     });
     expect(telemetry).toHaveBeenCalledWith(
       "identity.email_outbox.alert",
-      expect.objectContaining({ oldestPendingAgeMs: 16 * 60_000 }),
+      expect.objectContaining({ deadLetterCount: 1 }),
     );
   });
 });

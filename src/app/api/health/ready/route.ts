@@ -22,9 +22,10 @@ export function createReadyHandler(
     try {
       await databaseProbe();
     } catch {
+      const durationMs = Math.max(0, now() - startedAt);
       telemetry("platform.database.readiness", {
         correlationId,
-        durationMs: Math.max(0, now() - startedAt),
+        durationMs,
         ready: false,
       });
       return Response.json(
@@ -42,11 +43,19 @@ export function createReadyHandler(
         },
       );
     }
+    const durationMs = Math.max(0, now() - startedAt);
     telemetry("platform.database.readiness", {
       correlationId,
-      durationMs: Math.max(0, now() - startedAt),
+      durationMs,
       ready: true,
     });
+    if (durationMs > 1_000) {
+      telemetry("platform.database.readiness.alert", {
+        correlationId,
+        durationMs,
+        thresholdMs: 1_000,
+      });
+    }
     try {
       await identityOperationsProbe();
       return Response.json(

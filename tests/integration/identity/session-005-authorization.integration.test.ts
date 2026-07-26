@@ -231,7 +231,15 @@ it("requires MFA proof on the exact privileged session, not merely an enrolled f
     .update(identitySessions)
     .set({ mfaVerifiedAt: null })
     .where(eq(identitySessions.id, admin.sessionId));
-  const service = createIdentityAdministrationService(connection.db);
+  const telemetry: Array<{
+    event: string;
+    fields: Record<string, string | number | boolean | null>;
+  }> = [];
+  const service = createIdentityAdministrationService(
+    connection.db,
+    undefined,
+    (event, fields) => telemetry.push({ event, fields }),
+  );
   await expect(
     service.suspendAccount({
       actor: actor(admin.accountId, admin.sessionId),
@@ -239,6 +247,14 @@ it("requires MFA proof on the exact privileged session, not merely an enrolled f
       reasonCode: "security_review",
     }),
   ).rejects.toThrow("permission denied");
+  expect(telemetry).toContainEqual({
+    event: "identity.authorization.denied",
+    fields: {
+      action: "identity.account.suspend",
+      reason: "mfa_required",
+      count: 1,
+    },
+  });
 });
 
 it("searches only by exact UUID or normalized email", async () => {

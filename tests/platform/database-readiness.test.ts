@@ -65,7 +65,7 @@ describe("database readiness", () => {
 
   it("emits bounded database readiness latency with a correlation ID", async () => {
     const telemetry = vi.fn();
-    const clock = [100, 135];
+    const clock = [100, 1_135];
     const GET = createReadyHandler(
       async () => undefined,
       async () => undefined,
@@ -82,8 +82,16 @@ describe("database readiness", () => {
     expect(response.headers.get("x-correlation-id")).toBe("ready-test-1");
     expect(telemetry).toHaveBeenCalledWith("platform.database.readiness", {
       correlationId: "ready-test-1",
-      durationMs: 35,
+      durationMs: 1_035,
       ready: true,
     });
+    expect(telemetry).toHaveBeenCalledWith(
+      "platform.database.readiness.alert",
+      {
+        correlationId: "ready-test-1",
+        durationMs: 1_035,
+        thresholdMs: 1_000,
+      },
+    );
   });
 });

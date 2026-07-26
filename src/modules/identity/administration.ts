@@ -3,6 +3,7 @@ import { and, desc, eq, gt, isNull, lte, or, sql } from "drizzle-orm";
 import type { AppDatabase } from "@/platform/database/client";
 import type { DatabaseTransaction } from "@/platform/database/transaction";
 import { enqueueDomainEvent } from "@/platform/events/outbox";
+import type { Telemetry } from "@/platform/observability/telemetry";
 
 import { appendIdentityAudit } from "./audit";
 import {
@@ -66,19 +67,25 @@ async function requireCurrentPermission(
     permission: Permission;
     targetAccountId?: string;
   },
+  telemetry?: Telemetry,
 ): Promise<Actor> {
   const current = await loadCurrentActor(transaction, input.actor);
-  if (
-    !current ||
-    !evaluateAuthorization({
+  const decision = current
+    ? evaluateAuthorization({
       actor: current,
       permission: input.permission,
       targetAccountId: input.targetAccountId,
-    }).allowed
-  ) {
+    })
+    : { allowed: false as const, reason: "account_inactive" as const };
+  if (!decision.allowed) {
+    telemetry?.("identity.authorization.denied", {
+      action: input.permission,
+      reason: decision.reason,
+      count: 1,
+    });
     throw new Error("permission denied");
   }
-  return current;
+  return current!;
 }
 
 async function lockTargetAccount(
@@ -123,7 +130,16 @@ async function publishLifecycleEvent(
 export function createIdentityAdministrationService(
   database: AppDatabase,
   testHooks?: IdentityAdministrationTestHooks,
+  telemetry?: Telemetry,
 ) {
+  const requirePermission = (
+    transaction: DatabaseTransaction,
+    input: {
+      actor: Actor;
+      permission: Permission;
+      targetAccountId?: string;
+    },
+  ) => requireCurrentPermission(transaction, input, telemetry);
   return {
     searchAccounts: (
       actor: Actor,
@@ -131,7 +147,7 @@ export function createIdentityAdministrationService(
       limit = 20,
     ): Promise<SupportAccountDto[]> =>
       database.transaction(async (transaction) => {
-        await requireCurrentPermission(transaction, {
+        await requirePermission(transaction, {
           actor,
           permission: "identity.account.search",
         });
@@ -170,7 +186,7 @@ export function createIdentityAdministrationService(
       targetAccountId: string,
     ): Promise<SupportAccountDto> =>
       database.transaction(async (transaction) => {
-        await requireCurrentPermission(transaction, {
+        await requirePermission(transaction, {
           actor,
           permission: "identity.account.support.read",
           targetAccountId,
@@ -198,7 +214,7 @@ export function createIdentityAdministrationService(
       targetAccountId: string,
     ): Promise<AdminAccountDto> =>
       database.transaction(async (transaction) => {
-        await requireCurrentPermission(transaction, {
+        await requirePermission(transaction, {
           actor,
           permission: "identity.account.admin.read",
           targetAccountId,
@@ -245,7 +261,7 @@ export function createIdentityAdministrationService(
 
     getAccountAudit: (actor: Actor, targetAccountId: string, limit = 50) =>
       database.transaction(async (transaction) => {
-        await requireCurrentPermission(transaction, {
+        await requirePermission(transaction, {
           actor,
           permission: "identity.account.audit.read",
           targetAccountId,
@@ -268,7 +284,7 @@ export function createIdentityAdministrationService(
     revokeAccountSessions: (command: AdminCommand) =>
       database.transaction(async (transaction) => {
         assertReasonCode(command.reasonCode);
-        const current = await requireCurrentPermission(transaction, {
+        const current = await requirePermission(transaction, {
           actor: command.actor,
           permission: "identity.account.sessions.revoke",
           targetAccountId: command.targetAccountId,
@@ -292,7 +308,7 @@ export function createIdentityAdministrationService(
     suspendAccount: (command: AdminCommand) =>
       database.transaction(async (transaction) => {
         assertReasonCode(command.reasonCode);
-        const current = await requireCurrentPermission(transaction, {
+        const current = await requirePermission(transaction, {
           actor: command.actor,
           permission: "identity.account.suspend",
           targetAccountId: command.targetAccountId,
@@ -331,7 +347,7 @@ export function createIdentityAdministrationService(
     reactivateAccount: (command: AdminCommand) =>
       database.transaction(async (transaction) => {
         assertReasonCode(command.reasonCode);
-        const current = await requireCurrentPermission(transaction, {
+        const current = await requirePermission(transaction, {
           actor: command.actor,
           permission: "identity.account.reactivate",
           targetAccountId: command.targetAccountId,
@@ -368,7 +384,7 @@ export function createIdentityAdministrationService(
     grantGlobalRole: (command: RoleCommand) =>
       database.transaction(async (transaction) => {
         assertReasonCode(command.reasonCode);
-        const current = await requireCurrentPermission(transaction, {
+        const current = await requirePermission(transaction, {
           actor: command.actor,
           permission: "identity.global_role.grant",
           targetAccountId: command.targetAccountId,
@@ -473,7 +489,7 @@ export function createIdentityAdministrationService(
     revokeGlobalRole: (command: RoleCommand) =>
       database.transaction(async (transaction) => {
         assertReasonCode(command.reasonCode);
-        const current = await requireCurrentPermission(transaction, {
+        const current = await requirePermission(transaction, {
           actor: command.actor,
           permission: "identity.global_role.revoke",
           targetAccountId: command.targetAccountId,

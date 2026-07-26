@@ -341,6 +341,7 @@ export function createIdentityPrivacyService(
       },
     ) =>
       database.transaction(async (transaction) => {
+        const now = new Date();
         const accounts = await transaction
           .select({ id: identityAccounts.id, twoFactorEnabled: identityAccounts.twoFactorEnabled })
           .from(identityAccounts)
@@ -360,6 +361,7 @@ export function createIdentityPrivacyService(
             and(
               eq(identityAccountDeletionRequests.accountId, account.id),
               eq(identityAccountDeletionRequests.state, "scheduled"),
+              gt(identityAccountDeletionRequests.scheduledFor, now),
             ),
           )
           .for("update");
@@ -408,7 +410,6 @@ export function createIdentityPrivacyService(
             mfaSessionToken = verified.response.token ?? null;
           }
         }
-        const now = new Date();
         if (mfaSessionToken) {
           await transaction
             .update(identitySessions)

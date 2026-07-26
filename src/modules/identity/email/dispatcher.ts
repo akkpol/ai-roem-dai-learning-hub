@@ -224,7 +224,7 @@ export function createAuthEmailDispatcher(input: {
       const backlog = await input.repository.measureBacklog(now());
       const requiresAttention =
         backlog.oldestPendingAgeMs > 15 * 60_000 ||
-        summary.deadLettered > 0;
+        backlog.deadLetterCount > 0;
       input.telemetry?.("identity.email_outbox.metrics", {
         ...backlog,
         requiresAttention,

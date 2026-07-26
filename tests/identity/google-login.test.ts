@@ -68,7 +68,7 @@ describe("Google login boundary", () => {
       new Response(null, {
         status: 302,
         headers: {
-          location: "https://accounts.google.test/oauth",
+          location: "https://accounts.google.com/oauth",
           "set-cookie": "better-auth.state=signed; HttpOnly; Secure",
         },
       }),
@@ -99,7 +99,33 @@ describe("Google login boundary", () => {
     });
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "https://accounts.google.test/oauth",
+      "https://accounts.google.com/oauth",
+    );
+    expect(response.headers.get("set-cookie")).toContain("better-auth.state");
+  });
+
+  it("turns Better Auth's successful URL response into a browser redirect", async () => {
+    signInSocial.mockResolvedValueOnce(
+      new Response(null, {
+        status: 200,
+        headers: {
+          location: "https://accounts.google.com/o/oauth2/v2/auth?state=safe",
+          "set-cookie": "better-auth.state=signed; HttpOnly; Secure",
+        },
+      }),
+    );
+    const handlers = createGoogleLoginHandlers(database() as never, config);
+
+    const response = await handlers.start(
+      new Request("https://learning.example.test/api/auth/google", {
+        method: "POST",
+        headers: { origin: "https://learning.example.test" },
+      }),
+    );
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "https://accounts.google.com/o/oauth2/v2/auth?state=safe",
     );
     expect(response.headers.get("set-cookie")).toContain("better-auth.state");
   });

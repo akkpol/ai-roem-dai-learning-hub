@@ -12,7 +12,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FieldGroup, FieldSeparator } from "@/components/ui/field";
-import { readGoogleOAuthDisclosure } from "@/modules/identity";
+import {
+  currentIdentityPolicies,
+  readGoogleOAuthDisclosure,
+} from "@/modules/identity";
 
 export default function SignUpPage() {
   const googleDisclosure = readGoogleOAuthDisclosure(process.env);
@@ -36,8 +39,8 @@ export default function SignUpPage() {
           )}
           <AuthForm
             kind="sign-up"
-            termsVersion={process.env.AUTH_TERMS_VERSION}
-            privacyVersion={process.env.AUTH_PRIVACY_VERSION}
+            termsVersion={currentIdentityPolicies.termsVersion}
+            privacyVersion={currentIdentityPolicies.privacyVersion}
           />
         </FieldGroup>
       </CardContent>

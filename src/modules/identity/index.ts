@@ -15,6 +15,7 @@ export {
 } from "./runtime";
 export { readGoogleOAuthDisclosure } from "./config";
 export type { GoogleOAuthDisclosure } from "./config";
+export { currentIdentityPolicies } from "./policies";
 export { runIdentityRetention } from "./privacy";
 export {
   authenticateRequest,

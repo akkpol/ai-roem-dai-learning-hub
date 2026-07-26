@@ -253,7 +253,9 @@ export function AuthForm({
         {kind === "sign-up" && (
           <>
             <FieldDescription>
-              เมื่อสร้างบัญชี คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัว
+              เมื่อสร้างบัญชี คุณยอมรับ{" "}
+              <Link href="/terms">ข้อกำหนดการใช้งาน</Link> และ{" "}
+              <Link href="/privacy">นโยบายความเป็นส่วนตัว</Link>
             </FieldDescription>
             <Input name="termsVersion" type="hidden" value={termsVersion} />
             <Input name="privacyVersion" type="hidden" value={privacyVersion} />

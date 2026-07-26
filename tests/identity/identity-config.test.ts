@@ -13,10 +13,6 @@ const valid = {
   AUTH_BASE_URL: "https://learning.example.test/api/auth",
   AUTH_EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   AUTH_EMAIL_KEY_VERSION: "auth-email-v1",
-  AUTH_TERMS_VERSION: "terms-2026-07",
-  AUTH_PRIVACY_VERSION: "privacy-2026-07",
-  AUTH_TERMS_URL: "/terms",
-  AUTH_PRIVACY_URL: "/privacy",
   AUTH_EMAIL_FROM: "Learning Hub <auth@learn.example.test>",
 };
 
@@ -27,10 +23,6 @@ describe("Identity configuration", () => {
       AUTH_BASE_URL: "https://learning.example.test/api/auth",
       GOOGLE_CLIENT_ID: "google-client-id",
       GOOGLE_CLIENT_SECRET: "google-client-secret",
-      AUTH_TERMS_VERSION: "terms-2026-07",
-      AUTH_PRIVACY_VERSION: "privacy-2026-07",
-      AUTH_TERMS_URL: "/terms",
-      AUTH_PRIVACY_URL: "/privacy",
     };
 
     expect(readCoreAuthConfig(coreOnly)).toEqual({
@@ -41,8 +33,8 @@ describe("Identity configuration", () => {
         clientSecret: "google-client-secret",
       },
       currentPolicies: {
-        termsVersion: "terms-2026-07",
-        privacyVersion: "privacy-2026-07",
+        termsVersion: "2026-07-26",
+        privacyVersion: "2026-07-26",
         termsUrl: "/terms",
         privacyUrl: "/privacy",
       },
@@ -93,51 +85,22 @@ describe("Identity configuration", () => {
         GOOGLE_CLIENT_ID: undefined,
       }),
     ).toThrow("identity configuration is invalid");
-    expect(() =>
-      readCoreAuthConfig({
-        ...coreOnly,
-        AUTH_TERMS_VERSION: "terms-2026-07",
-        AUTH_PRIVACY_VERSION: undefined,
-      }),
-    ).toThrow("identity configuration is invalid");
   });
 
-  it("requires exact policy versions and safe relative policy URLs whenever Google is enabled", () => {
+  it("uses the published code-owned policy for Google OAuth", () => {
     const google = {
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://learning.example.test/api/auth",
       GOOGLE_CLIENT_ID: "google-client-id",
       GOOGLE_CLIENT_SECRET: "google-client-secret",
-      AUTH_TERMS_VERSION: "terms-2026-07",
-      AUTH_PRIVACY_VERSION: "privacy-2026-07",
-      AUTH_TERMS_URL: "/terms",
-      AUTH_PRIVACY_URL: "/privacy",
     };
 
-    for (const key of [
-      "AUTH_TERMS_VERSION",
-      "AUTH_PRIVACY_VERSION",
-      "AUTH_TERMS_URL",
-      "AUTH_PRIVACY_URL",
-    ] as const) {
-      expect(() =>
-        readCoreAuthConfig({ ...google, [key]: undefined }),
-      ).toThrow("identity configuration is invalid");
-      expect(
-        readGoogleOAuthDisclosure({ ...google, [key]: undefined }),
-      ).toBeUndefined();
-    }
-
-    expect(() =>
-      readCoreAuthConfig({
+    expect(
+      readGoogleOAuthDisclosure({
         ...google,
-        AUTH_TERMS_URL: "https://legal.example.test/terms",
+        AUTH_TERMS_URL: "https://untrusted.example/terms",
       }),
-    ).toThrow("identity configuration is invalid");
-    expect(() =>
-      readCoreAuthConfig({ ...google, AUTH_PRIVACY_URL: "//evil.test/policy" }),
-    ).toThrow("identity configuration is invalid");
-    expect(readGoogleOAuthDisclosure(google)).toEqual({
+    ).toEqual({
       termsUrl: "/terms",
       privacyUrl: "/privacy",
     });
@@ -147,7 +110,7 @@ describe("Identity configuration", () => {
     const config = readIdentityConfig(valid);
     expect(config.authSecret).toHaveLength(32);
     expect(config.emailEncryptionKey).toHaveLength(32);
-    expect(config.termsVersion).toBe("terms-2026-07");
+    expect(config.termsVersion).toBe("2026-07-26");
     expect(config.trustedProxy).toBe("none");
     expect(readIdentityConfig({ ...valid, VERCEL: "1" }).trustedProxy).toBe(
       "vercel",

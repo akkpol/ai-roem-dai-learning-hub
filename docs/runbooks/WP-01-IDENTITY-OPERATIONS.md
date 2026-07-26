@@ -35,12 +35,12 @@ Configure Development, Preview, and Production independently:
 
 - existing Identity variables: `AUTH_SECRET`, `AUTH_BASE_URL`,
   `AUTH_EMAIL_ENCRYPTION_KEY`, `AUTH_EMAIL_KEY_VERSION`,
-  `AUTH_TERMS_VERSION`, `AUTH_PRIVACY_VERSION`, `AUTH_EMAIL_FROM`,
-  `RESEND_API_KEY`, and `NEXT_PUBLIC_APP_URL`;
-- Google OAuth variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-  `AUTH_TERMS_URL`, and `AUTH_PRIVACY_URL`. Google OAuth fails closed unless
-  both credentials, both current policy versions, and both same-origin relative
-  policy paths are configured;
+  `AUTH_EMAIL_FROM`, `RESEND_API_KEY`, and `NEXT_PUBLIC_APP_URL`;
+- Google OAuth variables: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+  Google OAuth fails closed unless both credentials are configured. Published
+  Terms/Privacy versions and same-origin routes are code-owned in
+  `src/modules/identity/policies.ts`, so the deployed disclosure and accepted
+  versions cannot drift from environment configuration;
 - operations variables: `IDENTITY_EMAIL_WORKER_DATABASE_URL`,
   `IDENTITY_MAINTENANCE_DATABASE_URL`, `RESEND_WEBHOOK_SECRET`, and
   `CRON_SECRET`.

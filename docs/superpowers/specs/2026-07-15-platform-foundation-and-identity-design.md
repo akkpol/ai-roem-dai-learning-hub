@@ -14,7 +14,7 @@
 
 **Contract updated:** 2026-07-26 — removed the platform age requirement,
 approved Google OAuth as a unified sign-up/sign-in flow, and required exact
-policy versions plus configured policy links for that flow.
+code-owned policy versions plus public policy links for that flow.
 
 ## 1. เป้าหมาย
 
@@ -45,8 +45,8 @@ WP-01 ต้องทำให้โมดูลถัดไปมี actor แ�
 - ไม่กำหนดอายุขั้นต่ำและไม่รับหรือเก็บ age attestation; legacy column ต้อง nullable
 - Google OAuth ใช้ flow เดียวสำหรับบัญชีใหม่และบัญชีเดิม โดยรับเฉพาะอีเมลที่
   provider ยืนยันแล้วและบันทึก policy acceptance ตาม version ปัจจุบันจาก server;
-  Google เปิดใช้ได้ต่อเมื่อกำหนด policy versions และ same-origin relative links
-  ของ Terms/Privacy ครบถ้วน
+  policy versions และ same-origin relative links ของ Terms/Privacy ต้องเป็น
+  code-owned contract ใน release เดียวกับ public pages
 - ภาษาเริ่มต้น `th-TH` และ timezone เริ่มต้น `Asia/Bangkok`
 - ไม่ใช้ Better Auth Organization หรือ Admin plugin เป็น source of truth ของสิทธิ์ธุรกิจ
 - Authorization เป็นกฎของ Learning Hub และ deny by default
@@ -239,16 +239,17 @@ pending -> expired
 1. ปุ่ม “ดำเนินการต่อด้วย Google” ใช้ flow เดียวสำหรับบัญชีใหม่และบัญชีเดิม
 2. การกดปุ่มถือเป็นการยอมรับ terms และ privacy version ปัจจุบันจาก server
    โดย version และเวลารับถูกผูกใน signed OAuth state; ห้ามรับ version จาก client
-   และ UI ต้องแสดง accessible links ไปยัง Terms/Privacy จาก configured
-   same-origin relative paths โดยไม่ hardcode URL หรือข้อความกฎหมายฉบับใหม่
+   และ UI ต้องแสดง accessible links ไปยัง Terms/Privacy จาก code-owned
+   same-origin relative paths ที่ผูกกับ public pages ใน release เดียวกัน
 3. บัญชีใหม่ต้องมี verified email จาก Google และสร้าง account สถานะ `active`,
    profile, policy acceptances และ audit ใน transaction เดียวกัน
 4. ทุก callback ทั้งบัญชีใหม่ บัญชีเดิม และ verified same-email linking
    ต้องตรวจ signed policy state เทียบกับ current server versions แล้วบันทึก
    exact Terms/Privacy acceptances แบบ idempotent ใน transaction เดียวกัน
-5. หาก policy config/state หาย version เปลี่ยนระหว่าง flow หรือ acceptance/
+5. หาก signed policy state หาย version เปลี่ยนระหว่าง flow หรือ acceptance/
    onboarding write ใดล้มเหลว ต้อง rollback บัญชี, provider factor และ session
-   ทั้งหมด; ถ้า config ไม่ครบ UI ต้องซ่อน Google action และ route ต้อง fail closed
+   ทั้งหมด; ถ้า credential pair ไม่ครบ UI ต้องซ่อน Google action และ route ต้อง
+   fail closed
 6. บัญชีเดิมใช้ verified same-email linking ของ Better Auth และยังต้องผ่าน
    account status, 2FA, token encryption, Origin, state และ PKCE protections
 

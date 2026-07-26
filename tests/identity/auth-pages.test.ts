@@ -8,6 +8,8 @@ import ResetPasswordPage from "@/app/(auth)/reset-password/page";
 import SignUpPage from "@/app/(auth)/sign-up/page";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form";
+import PrivacyPage from "@/app/privacy/page";
+import TermsPage from "@/app/terms/page";
 import LoginPage from "@/app/login/page";
 import { LoginForm } from "@/components/login-form";
 
@@ -34,6 +36,8 @@ describe("Public authentication pages", () => {
     expect(signup).not.toContain("อายุ 18 ปีขึ้นไป");
     expect(signup).not.toContain('name="ageAttested"');
     expect(signup).toContain("ข้อกำหนดการใช้งาน");
+    expect(signup).toContain('href="/terms"');
+    expect(signup).toContain('href="/privacy"');
     expect(signup).not.toContain("TOTP");
     expect(signup).not.toContain("อุปกรณ์ที่เข้าสู่ระบบ");
   });
@@ -83,16 +87,21 @@ describe("Public authentication pages", () => {
     );
     vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-client-secret");
-    vi.stubEnv("AUTH_TERMS_VERSION", "terms-v1");
-    vi.stubEnv("AUTH_PRIVACY_VERSION", "privacy-v1");
-    vi.stubEnv("AUTH_TERMS_URL", "/terms");
-    vi.stubEnv("AUTH_PRIVACY_URL", "/privacy");
-
     const signup = render(SignUpPage);
 
     expect(signup).toContain("ดำเนินการต่อด้วย Google");
     expect(signup).toContain('href="/terms"');
     expect(signup).toContain('href="/privacy"');
+  });
+
+  it.each([
+    [TermsPage, "ข้อกำหนดการใช้งาน"],
+    [PrivacyPage, "นโยบายความเป็นส่วนตัว"],
+  ])("publishes the current policy page", (Page, heading) => {
+    const policy = render(Page);
+    expect(policy).toContain(heading);
+    expect(policy).toContain("2026-07-26");
+    expect(policy).toContain('href="/"');
   });
 
   it("uses a generic OAuth failure page without exposing provider details", () => {

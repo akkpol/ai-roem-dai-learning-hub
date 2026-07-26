@@ -12,14 +12,18 @@ permission matrix.
 
 Use separate PostgreSQL credentials:
 
-- `DATABASE_URL` — pooled `learning_hub_app`; application reads and user/admin
-  use cases. It can insert an email outbox intent but cannot update worker state.
+- `DATABASE_URL` — pooled `learning_hub_runtime`; this restricted login receives
+  the reviewed `learning_hub_app` grants directly, has no provider-admin
+  membership, and can insert an email outbox intent but cannot update worker
+  state.
 - `IDENTITY_EMAIL_WORKER_DATABASE_URL` —
-  `learning_hub_identity_email_worker`; claims and updates authentication email
-  outbox rows and inserts delivery-ledger events. It cannot mutate Identity
+  `learning_hub_email_worker_runtime`; this restricted login inherits only
+  `learning_hub_identity_email_worker`, claims and updates authentication email
+  outbox rows, and inserts delivery-ledger events. It cannot mutate Identity
   audit records.
 - `IDENTITY_MAINTENANCE_DATABASE_URL` —
-  `learning_hub_identity_maintenance`; deletion completion and bounded
+  `learning_hub_maintenance_runtime`; this restricted login inherits only
+  `learning_hub_identity_maintenance` for deletion completion and bounded
   retention.
 - migration credential — schema owner used only by the reviewed migration
   workflow.
@@ -28,6 +32,11 @@ Never reuse the migration credential in the application, webhook, or cron
 runtime. Confirm the effective database, branch, role, and endpoint from the
 provider before a migration or acceptance run; an environment-variable name is
 not provider-identity evidence.
+
+Neon Console-created roles receive provider-administration membership. Do not
+use them as application credentials. Create runtime login roles through the
+schema-owner workflow with `NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`,
+then verify their membership and effective table privileges before rollout.
 
 ## 2. Required secrets and configuration
 

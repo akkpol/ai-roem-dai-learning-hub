@@ -2,9 +2,10 @@ import Image from "next/image"
 import Link from "next/link"
 
 import { LoginForm } from "@/components/login-form"
-import { hasGoogleOAuthCredentials } from "@/modules/identity"
+import { readGoogleOAuthDisclosure } from "@/modules/identity"
 
 export default function LoginPage() {
+  const googleDisclosure = readGoogleOAuthDisclosure(process.env)
   return (
     <main className="grid min-h-dvh lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -17,7 +18,7 @@ export default function LoginPage() {
         <div className="flex flex-1 items-center justify-center py-8">
           <div className="w-full max-w-sm">
             <LoginForm
-              googleEnabled={hasGoogleOAuthCredentials(process.env)}
+              googleDisclosure={googleDisclosure}
             />
           </div>
         </div>

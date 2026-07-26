@@ -121,7 +121,6 @@ export function createIdentityService(
               name: command.displayName,
               email: command.email,
               password: command.password,
-              ageAttestedAt: command.ageAttestedAt,
               callbackURL: command.callbackPath,
             },
           });
@@ -134,14 +133,14 @@ export function createIdentityService(
               accountId: result.user.id,
               policyType: "terms",
               policyVersion: command.termsVersion,
-              acceptedAt: command.ageAttestedAt,
+              acceptedAt: command.acceptedAt,
               userAgent: request.userAgent,
             },
             {
               accountId: result.user.id,
               policyType: "privacy",
               policyVersion: command.privacyVersion,
-              acceptedAt: command.ageAttestedAt,
+              acceptedAt: command.acceptedAt,
               userAgent: request.userAgent,
             },
           ]);
@@ -150,7 +149,7 @@ export function createIdentityService(
             actor: { type: "account", accountId: result.user.id },
             action: "identity.signup_requested.v1",
             payload: { source: "email_password" },
-            occurredAt: command.ageAttestedAt,
+            occurredAt: command.acceptedAt,
           });
           await testHooks?.afterSignupWrites?.();
         });

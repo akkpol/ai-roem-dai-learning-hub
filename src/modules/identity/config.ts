@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { currentIdentityPolicies } from "@/modules/identity/policies";
 import type { TrustedProxyBoundary } from "@/platform/security/client-ip";
 
 const coreAuthEnvironmentShape = {
@@ -29,8 +30,6 @@ const identityEnvironment = z
     ...coreAuthEnvironmentShape,
     AUTH_EMAIL_ENCRYPTION_KEY: z.string().min(1),
     AUTH_EMAIL_KEY_VERSION: z.string().min(1).max(64),
-    AUTH_TERMS_VERSION: z.string().min(1).max(100),
-    AUTH_PRIVACY_VERSION: z.string().min(1).max(100),
     AUTH_EMAIL_FROM: z.string().min(3).max(320),
     RESEND_API_KEY: z.string().min(1).optional(),
   })
@@ -43,8 +42,16 @@ export type CoreAuthConfig = {
     clientId: string;
     clientSecret: string;
   };
+  currentPolicies?: {
+    termsVersion: string;
+    privacyVersion: string;
+    termsUrl: string;
+    privacyUrl: string;
+  };
   trustedProxy: TrustedProxyBoundary;
 };
+
+export type GoogleAuthConfig = CoreAuthConfig;
 
 export type IdentityConfig = CoreAuthConfig & {
   emailEncryptionKey: Buffer;
@@ -73,6 +80,12 @@ function toCoreAuthConfig(
             clientSecret: value.GOOGLE_CLIENT_SECRET,
           }
         : undefined,
+    currentPolicies: {
+      termsVersion: currentIdentityPolicies.termsVersion,
+      privacyVersion: currentIdentityPolicies.privacyVersion,
+      termsUrl: currentIdentityPolicies.termsUrl,
+      privacyUrl: currentIdentityPolicies.privacyUrl,
+    },
     trustedProxy: input.VERCEL === "1" ? "vercel" : "none",
   };
 }
@@ -104,17 +117,31 @@ export function readIdentityConfig(
     ...toCoreAuthConfig(value, input),
     emailEncryptionKey: key,
     emailKeyVersion: value.AUTH_EMAIL_KEY_VERSION,
-    termsVersion: value.AUTH_TERMS_VERSION,
-    privacyVersion: value.AUTH_PRIVACY_VERSION,
+    termsVersion: currentIdentityPolicies.termsVersion,
+    privacyVersion: currentIdentityPolicies.privacyVersion,
     emailFrom: value.AUTH_EMAIL_FROM,
     resendApiKey: value.RESEND_API_KEY,
   };
 }
 
-export function hasGoogleOAuthCredentials(
+export type GoogleOAuthDisclosure = {
+  termsUrl: string;
+  privacyUrl: string;
+};
+
+export function readGoogleOAuthDisclosure(
   input: Record<string, string | undefined>,
-): boolean {
-  return Boolean(input.GOOGLE_CLIENT_ID && input.GOOGLE_CLIENT_SECRET);
+): GoogleOAuthDisclosure | undefined {
+  try {
+    const config = readCoreAuthConfig(input);
+    if (!config.googleOAuth || !config.currentPolicies) return undefined;
+    return {
+      termsUrl: config.currentPolicies.termsUrl,
+      privacyUrl: config.currentPolicies.privacyUrl,
+    };
+  } catch {
+    return undefined;
+  }
 }
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();

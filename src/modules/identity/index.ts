@@ -13,7 +13,9 @@ export {
   getGoogleLoginHandlers,
   getIdentityHttpHandlers,
 } from "./runtime";
-export { hasGoogleOAuthCredentials } from "./config";
+export { readGoogleOAuthDisclosure } from "./config";
+export type { GoogleOAuthDisclosure } from "./config";
+export { currentIdentityPolicies } from "./policies";
 export { runIdentityRetention } from "./privacy";
 export {
   authenticateRequest,

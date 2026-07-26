@@ -40,8 +40,8 @@ async function seedAccount() {
   accountIds.push(id);
   await migrationClient.query(
     "insert into identity_accounts " +
-      "(id,name,email,email_verified,status,age_attested_at,two_factor_enabled) " +
-      "values ($1,$2,$3,true,'active',now(),true)",
+      "(id,name,email,email_verified,status,two_factor_enabled) " +
+      "values ($1,$2,$3,true,'active',true)",
     [id, "Privilege test", `${id}@example.test`],
   );
   return id;

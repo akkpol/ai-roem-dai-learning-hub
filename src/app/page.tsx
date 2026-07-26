@@ -34,18 +34,28 @@ export default function HomePage() {
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-            <LinkButton className="w-full sm:w-auto" href="/sign-up" size="lg">
-              สมัครสมาชิก
-            </LinkButton>
-            <LinkButton
-              className="w-full sm:w-auto"
-              href="/login"
-              size="lg"
-              variant="outline"
-            >
-              เข้าสู่ระบบ
-            </LinkButton>
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <LinkButton className="w-full sm:w-auto" href="/sign-up" size="lg">
+                สมัครสมาชิก
+              </LinkButton>
+              <LinkButton
+                className="w-full sm:w-auto"
+                href="/login"
+                size="lg"
+                variant="outline"
+              >
+                เข้าสู่ระบบ
+              </LinkButton>
+            </div>
+            <nav aria-label="นโยบาย" className="flex flex-wrap justify-center gap-1">
+              <LinkButton href="/terms" size="sm" variant="link">
+                ข้อกำหนดการใช้งาน
+              </LinkButton>
+              <LinkButton href="/privacy" size="sm" variant="link">
+                นโยบายความเป็นส่วนตัว
+              </LinkButton>
+            </nav>
           </div>
         </EmptyContent>
       </Empty>

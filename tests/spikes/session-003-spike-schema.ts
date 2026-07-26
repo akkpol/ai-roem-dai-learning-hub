@@ -26,7 +26,6 @@ export const identityAccounts = pgTable(
     createdAt: utcTimestamp("created_at").defaultNow().notNull(),
     updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
     status: text("status").default("pending_verification").notNull(),
-    ageAttestedAt: utcTimestamp("age_attested_at").notNull(),
   },
   (table) => [
     uniqueIndex("identity_accounts_email_unique").on(table.email),
@@ -182,8 +181,7 @@ export const session003SpikeDdl = sql.raw(`
     image text,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    status text not null default 'pending_verification',
-    age_attested_at timestamptz not null
+    status text not null default 'pending_verification'
   );
   create table if not exists identity_sessions (
     id uuid primary key default gen_random_uuid(),

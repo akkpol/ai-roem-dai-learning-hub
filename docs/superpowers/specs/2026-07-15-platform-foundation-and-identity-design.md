@@ -12,15 +12,19 @@
 
 **Approved on:** 2026-07-15
 
+**Contract updated:** 2026-07-26 — removed the platform age requirement,
+approved Google OAuth as a unified sign-up/sign-in flow, and required exact
+code-owned policy versions plus public policy links for that flow.
+
 ## 1. เป้าหมาย
 
-สร้างฐาน PostgreSQL และระบบ Identity and Access ที่พร้อมใช้งานจริงสำหรับ Learning Hub โดยจบเส้นทางสมัคร ยืนยันอีเมล เข้าสู่ระบบ กู้รหัสผ่าน โปรไฟล์ session, 2FA, privacy, global roles, bootstrap admin, audit, readiness และการทดสอบแบบ end-to-end
+สร้างฐาน PostgreSQL และระบบ Identity and Access ที่พร้อมใช้งานจริงสำหรับ Learning Hub โดยจบเส้นทางสมัครด้วยอีเมลหรือ Google OAuth ยืนยันอีเมล เข้าสู่ระบบ กู้รหัสผ่าน โปรไฟล์ session, 2FA, privacy, global roles, bootstrap admin, audit, readiness และการทดสอบแบบ end-to-end
 
 WP-01 ต้องทำให้โมดูลถัดไปมี actor และ authorization contract ที่เชื่อถือได้ โดยไม่สร้าง Organization, Instructor, Catalog, Offering, Enrollment หรือ Commerce ล่วงหน้า
 
 ## 2. ผลลัพธ์ที่ผู้ใช้ต้องได้รับ
 
-1. ผู้มีอายุอย่างน้อย 18 ปีสมัครด้วยอีเมลและรหัสผ่านได้
+1. ผู้ใช้สร้างบัญชีด้วยอีเมลและรหัสผ่าน หรือดำเนินการต่อด้วย Google ได้โดยไม่มีข้อกำหนดอายุขั้นต่ำ
 2. บัญชีเข้าสู่ระบบไม่ได้จนกว่าอีเมลจะยืนยันแล้ว
 3. ผู้ใช้แก้โปรไฟล์ เปลี่ยนรหัสผ่าน เปิด 2FA และจัดการ session ของตนได้
 4. ผู้ใช้ดาวน์โหลดข้อมูล Identity ของตนและขอลบบัญชีได้จริง
@@ -36,9 +40,13 @@ WP-01 ต้องทำให้โมดูลถัดไปมี actor แ�
 - ใช้ Better Auth Drizzle adapter และไม่ให้ Better Auth apply migration ตรงกับ Production
 - ใช้ database-backed session ไม่ใช้ stateless session เป็นแหล่งตัดสินสิทธิ์
 - ใช้ Resend หลัง `AuthEmailSender` port สำหรับอีเมลยืนยัน กู้รหัสผ่าน และยืนยันการลบบัญชี
-- ใช้อีเมลและรหัสผ่านเป็นวิธีเข้าสู่ระบบของ WP-01; social login และ passkey อยู่นอกขอบเขต
+- ใช้อีเมลและรหัสผ่าน รวมถึง Google OAuth เป็นวิธีเข้าสู่ระบบของ WP-01; provider อื่นและ passkey อยู่นอกขอบเขต
 - ใช้ TOTP 2FA พร้อม recovery codes; ผู้ใช้ทั่วไปเปิดได้เอง และทุก global privileged role ต้องเปิดก่อนใช้สิทธิ์
-- เปิดรับบัญชีอายุ 18 ปีขึ้นไป โดยเก็บ `age_attested_at` แทนวันเกิด
+- ไม่กำหนดอายุขั้นต่ำและไม่รับหรือเก็บ age attestation; legacy column ต้อง nullable
+- Google OAuth ใช้ flow เดียวสำหรับบัญชีใหม่และบัญชีเดิม โดยรับเฉพาะอีเมลที่
+  provider ยืนยันแล้วและบันทึก policy acceptance ตาม version ปัจจุบันจาก server;
+  policy versions และ same-origin relative links ของ Terms/Privacy ต้องเป็น
+  code-owned contract ใน release เดียวกับ public pages
 - ภาษาเริ่มต้น `th-TH` และ timezone เริ่มต้น `Asia/Bangkok`
 - ไม่ใช้ Better Auth Organization หรือ Admin plugin เป็น source of truth ของสิทธิ์ธุรกิจ
 - Authorization เป็นกฎของ Learning Hub และ deny by default
@@ -50,6 +58,7 @@ WP-01 ต้องทำให้โมดูลถัดไปมี actor แ�
 - PostgreSQL connection, transaction boundary, migration workflow และ integration-test database
 - Liveness เดิมและ database readiness endpoint ใหม่
 - Account, authentication factor, verification, session และ 2FA
+- Google OAuth sign-up/sign-in และ verified same-email account linking
 - Profile ส่วนบุคคลขั้นต่ำ
 - Policy acceptance แบบ versioned
 - Global role grants และ permission evaluation
@@ -62,8 +71,7 @@ WP-01 ต้องทำให้โมดูลถัดไปมี actor แ�
 
 ### Out of scope
 
-- ผู้ใช้ที่อายุต่ำกว่า 18 ปีและ guardian consent
-- Social login, enterprise SSO, passkey และ SMS/phone authentication
+- Social provider อื่น, enterprise SSO, passkey และ SMS/phone authentication
 - Organization, membership และ organization role
 - Instructor application, verification และ payout identity
 - Course, catalog, offering, checkout, payment และ enrollment
@@ -172,7 +180,7 @@ Identity publish event แบบ versioned ผ่าน transactional outbox:
 
 - Canonical email แปลงเป็น lowercase ก่อนบันทึก และ DB บังคับ `email = lower(email)` พร้อม unique constraint
 - Better Auth compatibility name เป็น internal cache เท่านั้น; `identity_profiles.display_name` เป็น application source of truth และอัปเดตพร้อมกันใน transaction
-- `age_attested_at` ต้องมีค่าก่อนสร้างบัญชี
+- ระบบไม่รับ age attestation; `age_attested_at` เป็น legacy nullable column ระหว่างช่วงที่ยังไม่ลบ schema
 - Policy version จาก client ใช้เป็น acknowledgement เท่านั้น Server ต้องเทียบกับ current published versions และปฏิเสธ form เก่าที่ version ไม่ตรง
 - `email_verified = true` อย่างเดียวไม่พอสำหรับ login; `status` ต้องเป็น `active`
 - Password และ token columns ห้ามถูกเลือกใน DTO, log, analytics หรือ audit payload
@@ -188,7 +196,9 @@ pending_verification -> active -> suspended -> active
                               -> deletion_scheduled -> closed
 ```
 
-- `pending_verification -> active` เกิดหลัง email verification สำเร็จเท่านั้น
+- `pending_verification -> active` เกิดหลัง email verification สำเร็จ
+- บัญชีใหม่จาก Google สร้างเป็น `active` ได้ทันทีเมื่อ provider ยืนยันอีเมลแล้ว
+  และ profile, policy acceptances กับ audit เขียนสำเร็จใน transaction เดียวกัน
 - `active -> suspended` ต้องมาจาก authorized admin use case พร้อมเหตุผล
 - suspension และ closure revoke session ทั้งหมดใน transaction เดียวกับการเปลี่ยน status
 - `deletion_scheduled -> active` ทำได้ภายใน cooling period หลังยืนยัน credential และ 2FA เมื่อเปิดไว้
@@ -218,11 +228,30 @@ pending -> expired
 
 ### Sign up
 
-1. รับ display name, email, password, age attestation และ policy versions
+1. รับ display name, email, password และ policy versions
 2. Validate ฝั่ง server และ rate limit ตาม IP + normalized email
 3. สร้าง pending account, profile, policy acceptances, audit และ encrypted email outbox ใน transaction
 4. ตอบข้อความแบบเดียวกันทั้งกรณีอีเมลใหม่และอีเมลมีอยู่แล้ว เพื่อลด email enumeration
 5. หลังผู้ใช้กดลิงก์สำเร็จ ให้ account เป็น active แต่ไม่ auto-login
+
+### Google OAuth
+
+1. ปุ่ม “ดำเนินการต่อด้วย Google” ใช้ flow เดียวสำหรับบัญชีใหม่และบัญชีเดิม
+2. การกดปุ่มถือเป็นการยอมรับ terms และ privacy version ปัจจุบันจาก server
+   โดย version และเวลารับถูกผูกใน signed OAuth state; ห้ามรับ version จาก client
+   และ UI ต้องแสดง accessible links ไปยัง Terms/Privacy จาก code-owned
+   same-origin relative paths ที่ผูกกับ public pages ใน release เดียวกัน
+3. บัญชีใหม่ต้องมี verified email จาก Google และสร้าง account สถานะ `active`,
+   profile, policy acceptances และ audit ใน transaction เดียวกัน
+4. ทุก callback ทั้งบัญชีใหม่ บัญชีเดิม และ verified same-email linking
+   ต้องตรวจ signed policy state เทียบกับ current server versions แล้วบันทึก
+   exact Terms/Privacy acceptances แบบ idempotent ใน transaction เดียวกัน
+5. หาก signed policy state หาย version เปลี่ยนระหว่าง flow หรือ acceptance/
+   onboarding write ใดล้มเหลว ต้อง rollback บัญชี, provider factor และ session
+   ทั้งหมด; ถ้า credential pair ไม่ครบ UI ต้องซ่อน Google action และ route ต้อง
+   fail closed
+6. บัญชีเดิมใช้ verified same-email linking ของ Better Auth และยังต้องผ่าน
+   account status, 2FA, token encryption, Origin, state และ PKCE protections
 
 ### Sign in
 
@@ -445,6 +474,7 @@ Events ใช้ correlation ID และ account UUID เมื่อเหม�
 ### E2E tests
 
 - Sign up -> test inbox -> verify -> sign in -> update profile
+- Google OAuth -> create active account หรือ link verified same-email account -> update profile
 - Forgot password -> reset -> previous sessions denied
 - Enable 2FA -> sign in -> use recovery code -> reused code denied
 - Revoke one device และ revoke all other devices
@@ -483,7 +513,7 @@ Produces database configuration, Drizzle schema/migration workflow, transaction 
 
 ### SESSION-003 — Authentication and auth email
 
-Consumes SESSION-002 and produces Better Auth integration, mapped core tables, sign-up/sign-in/verify/reset flows, email outbox, Resend adapter contract, auth routes/pages และ focused E2E
+Consumes SESSION-002 and produces Better Auth integration, mapped core tables, email and Google OAuth sign-up/sign-in/verify/reset flows, email outbox, Resend adapter contract, auth routes/pages และ focused E2E
 
 ### SESSION-004 — Profile, session security, 2FA and privacy
 
@@ -503,7 +533,7 @@ Consumes SESSION-005 and produces admin account UI, Resend webhook handling, ful
 
 WP-01 เป็น `verified` เมื่อ SESSION-002 ถึง SESSION-006 ผ่าน Lead review และเงื่อนไขต่อไปนี้ครบ:
 
-1. เส้นทางสมัคร ยืนยัน login, reset, profile, session, 2FA, export และ deletion ผ่าน E2E
+1. เส้นทางสมัครด้วยอีเมลและ Google OAuth, ยืนยัน, login, reset, profile, session, 2FA, export และ deletion ผ่าน E2E
 2. Permission matrix ผ่านทั้ง allow และ deny cases
 3. Suspension, password reset, role change และ closure ทำให้สิทธิ์/session เก่าหยุดตาม contract
 4. Migration จากฐานว่างและ PostgreSQL integration/concurrency tests ผ่าน

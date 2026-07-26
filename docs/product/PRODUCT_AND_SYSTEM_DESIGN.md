@@ -26,6 +26,11 @@ AI เป็นเพียงหนึ่งหมวดหมู่ ห้า�
 8. ใบรับรองออกโดยผู้สอนหรือสถาบัน และตรวจสอบความถูกต้องผ่านแพลตฟอร์ม
 9. ไม่มีข้อมูลหรือผู้ใช้ Production เดิมที่ต้องย้าย
 10. สร้างระบบใหม่ใน repo เดิมและนำกลับมาใช้เฉพาะ infrastructure ที่ผ่านการตรวจว่าทั่วไปพอ
+11. Learning Hub ไม่กำหนดอายุขั้นต่ำสำหรับการสร้างบัญชีและไม่เก็บ age attestation
+12. ผู้ใช้สร้างหรือเข้าสู่บัญชีด้วย Google OAuth flow เดียวได้ โดยการดำเนินการต่อ
+    ถือเป็นการยอมรับข้อกำหนดและนโยบายฉบับปัจจุบันที่ server กำหนด และ UI ต้อง
+    แสดงลิงก์ public ของข้อกำหนดกับนโยบายที่ version อยู่ใน code release เดียวกัน
+    ก่อนเริ่ม flow
 
 ## 3. Users and roles
 
@@ -178,7 +183,7 @@ Account created → instructor application → review → instructor verified �
 
 ### Demand workflow
 
-Visitor discovers offering → account created → order created → payment confirmed or admission approved → enrollment granted → learner accesses content → completion evaluated → credential issued → verified review allowed
+Visitor discovers offering → account created with email or Google → order created → payment confirmed or admission approved → enrollment granted → learner accesses content → completion evaluated → credential issued → verified review allowed
 
 ### Finance workflow
 

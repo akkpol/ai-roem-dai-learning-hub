@@ -53,7 +53,6 @@ async function seedAccount(input: {
     email: `${accountId}@example.test`,
     emailVerified: true,
     status: input.status ?? "active",
-    ageAttestedAt: new Date("2026-01-01T00:00:00.000Z"),
     twoFactorEnabled: input.twoFactor ?? true,
   });
   await connection.db.insert(identitySessions).values({

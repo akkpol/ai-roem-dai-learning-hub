@@ -37,7 +37,6 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
     email: null,
     emailVerified: true,
     status: "closed",
-    ageAttestedAt: new Date("2023-01-01T00:00:00.000Z"),
     closedAt: new Date("2023-01-02T00:00:00.000Z"),
   });
   await connection.db.insert(identityAccounts).values({
@@ -46,7 +45,6 @@ it("bounds history work and deletes terminal email metadata after 90 days", asyn
     email: null,
     emailVerified: true,
     status: "closed",
-    ageAttestedAt: new Date("2023-01-01T00:00:00.000Z"),
     closedAt: now,
   });
   await connection.db.insert(identityPolicyAcceptances).values(
@@ -141,7 +139,6 @@ it("dry-runs then idempotently closes a due account and purges credentials", asy
     email: `${accountId}@example.test`,
     emailVerified: true,
     status: "deletion_scheduled",
-    ageAttestedAt: new Date("2026-01-01T00:00:00.000Z"),
     twoFactorEnabled: true,
   });
   await connection.db.insert(identityProfiles).values({

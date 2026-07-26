@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createTransactionAuth } from "@/modules/identity/auth";
-import type { CoreAuthConfig } from "@/modules/identity/config";
+import type { GoogleAuthConfig } from "@/modules/identity/config";
 
 const { betterAuthMock } = vi.hoisted(() => ({
   betterAuthMock: vi.fn((options: unknown) => options),
@@ -23,7 +23,13 @@ const config = {
     clientId: "google-client-id",
     clientSecret: "google-client-secret",
   },
-} satisfies CoreAuthConfig;
+  currentPolicies: {
+    termsVersion: "terms-v1",
+    privacyVersion: "privacy-v1",
+    termsUrl: "/terms",
+    privacyUrl: "/privacy",
+  },
+} satisfies GoogleAuthConfig;
 
 function transaction(
   status: "active" | "suspended",
@@ -39,7 +45,7 @@ function transaction(
 }
 
 describe("Google provider configuration", () => {
-  it("encrypts provider tokens and forbids social signup", () => {
+  it("encrypts provider tokens and allows Google signup", () => {
     createTransactionAuth(transaction("active") as never, config, {
       sendVerificationEmail: async () => undefined,
       sendResetPassword: async () => undefined,
@@ -51,11 +57,16 @@ describe("Google provider configuration", () => {
           google: {
             clientId: "google-client-id",
             clientSecret: "google-client-secret",
-            disableSignUp: true,
+            disableSignUp: false,
             prompt: "select_account",
           },
         },
         account: { encryptOAuthTokens: true },
+        user: expect.objectContaining({
+          additionalFields: expect.not.objectContaining({
+            ageAttestedAt: expect.anything(),
+          }),
+        }),
       }),
     );
   });
@@ -97,12 +108,14 @@ describe("Google provider configuration", () => {
   });
 
   it("does not let Google OAuth bypass an enabled second factor", async () => {
+    const beforeGoogleSessionCreate = vi.fn(async () => undefined);
     const auth = createTransactionAuth(
       transaction("active", true) as never,
       config,
       {
         sendVerificationEmail: async () => undefined,
         sendResetPassword: async () => undefined,
+        beforeGoogleSessionCreate,
       },
       { googleOAuthCallback: true },
     ) as unknown as {
@@ -118,5 +131,75 @@ describe("Google provider configuration", () => {
     expect(
       await auth.databaseHooks.session.create.before({ userId: "mfa-id" }),
     ).toBe(false);
+    expect(beforeGoogleSessionCreate).not.toHaveBeenCalled();
+  });
+
+  it("persists Google policy acceptance before creating an allowed session", async () => {
+    const beforeGoogleSessionCreate = vi.fn(async () => undefined);
+    const auth = createTransactionAuth(
+      transaction("active") as never,
+      config,
+      {
+        sendVerificationEmail: async () => undefined,
+        sendResetPassword: async () => undefined,
+        beforeGoogleSessionCreate,
+      },
+      { googleOAuthCallback: true },
+    ) as unknown as {
+      databaseHooks: {
+        session: {
+          create: {
+            before: (session: { userId: string }) => Promise<boolean>;
+          };
+        };
+      };
+    };
+
+    await expect(
+      auth.databaseHooks.session.create.before({ userId: "active-google-id" }),
+    ).resolves.toBe(true);
+    expect(beforeGoogleSessionCreate).toHaveBeenCalledWith(
+      "active-google-id",
+    );
+  });
+
+  it("wires Google user creation hooks only for the OAuth callback", async () => {
+    const beforeGoogleUserCreate = vi.fn(async () => ({
+      status: "active" as const,
+    }));
+    const afterGoogleUserCreate = vi.fn(async () => undefined);
+    const auth = createTransactionAuth(
+      transaction("active") as never,
+      config,
+      {
+        sendVerificationEmail: async () => undefined,
+        sendResetPassword: async () => undefined,
+        beforeGoogleUserCreate,
+        afterGoogleUserCreate,
+      },
+      { googleOAuthCallback: true },
+    ) as unknown as {
+      databaseHooks: {
+        user: {
+          create: {
+            before: (user: object) => Promise<{ data: { status: "active" } }>;
+            after: (user: object) => Promise<void>;
+          };
+        };
+      };
+    };
+
+    const user = {
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "Google Learner",
+      email: "learner@example.test",
+      emailVerified: true,
+    };
+    await expect(
+      auth.databaseHooks.user.create.before(user),
+    ).resolves.toEqual({ data: { status: "active" } });
+    await auth.databaseHooks.user.create.after(user);
+    expect(beforeGoogleUserCreate).toHaveBeenCalledWith(user);
+    expect(afterGoogleUserCreate).toHaveBeenCalledWith(user);
   });
 });

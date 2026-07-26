@@ -30,6 +30,32 @@
   margin-block-start: var(--typeset-flow);
 }
 
+.typeset-policy section > * + * {
+  margin-block-start: 0.75em;
+}
+
+.typeset-policy h2 {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.typeset-policy ul {
+  padding-inline-start: 1.5rem;
+  list-style: disc;
+}
+
+.typeset-policy li + li {
+  margin-block-start: 0.4em;
+}
+
+.typeset-policy a {
+  color: var(--primary);
+  text-decoration-line: underline;
+  text-underline-offset: 0.2em;
+}
+
 .typeset-scroll {
   max-width: 100%;
   overflow-x: auto;

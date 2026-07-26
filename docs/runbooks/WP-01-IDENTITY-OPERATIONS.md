@@ -12,14 +12,18 @@ permission matrix.
 
 Use separate PostgreSQL credentials:
 
-- `DATABASE_URL` — pooled `learning_hub_app`; application reads and user/admin
-  use cases. It can insert an email outbox intent but cannot update worker state.
+- `DATABASE_URL` — pooled `learning_hub_runtime`; this restricted login receives
+  the reviewed `learning_hub_app` grants directly, has no provider-admin
+  membership, and can insert an email outbox intent but cannot update worker
+  state.
 - `IDENTITY_EMAIL_WORKER_DATABASE_URL` —
-  `learning_hub_identity_email_worker`; claims and updates authentication email
-  outbox rows and inserts delivery-ledger events. It cannot mutate Identity
+  `learning_hub_email_worker_runtime`; this restricted login inherits only
+  `learning_hub_identity_email_worker`, claims and updates authentication email
+  outbox rows, and inserts delivery-ledger events. It cannot mutate Identity
   audit records.
 - `IDENTITY_MAINTENANCE_DATABASE_URL` —
-  `learning_hub_identity_maintenance`; deletion completion and bounded
+  `learning_hub_maintenance_runtime`; this restricted login inherits only
+  `learning_hub_identity_maintenance` for deletion completion and bounded
   retention.
 - migration credential — schema owner used only by the reviewed migration
   workflow.
@@ -29,14 +33,23 @@ runtime. Confirm the effective database, branch, role, and endpoint from the
 provider before a migration or acceptance run; an environment-variable name is
 not provider-identity evidence.
 
+Neon Console-created roles receive provider-administration membership. Do not
+use them as application credentials. Create runtime login roles through the
+schema-owner workflow with `NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS`,
+then verify their membership and effective table privileges before rollout.
+
 ## 2. Required secrets and configuration
 
 Configure Development, Preview, and Production independently:
 
 - existing Identity variables: `AUTH_SECRET`, `AUTH_BASE_URL`,
   `AUTH_EMAIL_ENCRYPTION_KEY`, `AUTH_EMAIL_KEY_VERSION`,
-  `AUTH_TERMS_VERSION`, `AUTH_PRIVACY_VERSION`, `AUTH_EMAIL_FROM`,
-  `RESEND_API_KEY`, and `NEXT_PUBLIC_APP_URL`;
+  `AUTH_EMAIL_FROM`, `RESEND_API_KEY`, and `NEXT_PUBLIC_APP_URL`;
+- Google OAuth variables: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+  Google OAuth fails closed unless both credentials are configured. Published
+  Terms/Privacy versions and same-origin routes are code-owned in
+  `src/modules/identity/policies.ts`, so the deployed disclosure and accepted
+  versions cannot drift from environment configuration;
 - operations variables: `IDENTITY_EMAIL_WORKER_DATABASE_URL`,
   `IDENTITY_MAINTENANCE_DATABASE_URL`, `RESEND_WEBHOOK_SECRET`, and
   `CRON_SECRET`.

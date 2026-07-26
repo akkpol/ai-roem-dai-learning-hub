@@ -1,4 +1,6 @@
 import { AuthForm } from "../_components/auth-form";
+import { GooglePolicyDisclosure } from "../_components/google-policy-disclosure";
+import { GoogleSignInForm } from "../_components/google-sign-in-form";
 
 import { LinkButton } from "@/components/ui/button";
 import {
@@ -9,8 +11,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { FieldGroup, FieldSeparator } from "@/components/ui/field";
+import {
+  currentIdentityPolicies,
+  readGoogleOAuthDisclosure,
+} from "@/modules/identity";
 
 export default function SignUpPage() {
+  const googleDisclosure = readGoogleOAuthDisclosure(process.env);
   return (
     <Card>
       <CardHeader>
@@ -21,11 +29,20 @@ export default function SignUpPage() {
         <CardDescription>เริ่มเรียนรู้ทุกศาสตร์ด้วยบัญชีเดียว</CardDescription>
       </CardHeader>
       <CardContent>
-        <AuthForm
-          kind="sign-up"
-          termsVersion={process.env.AUTH_TERMS_VERSION ?? "current"}
-          privacyVersion={process.env.AUTH_PRIVACY_VERSION ?? "current"}
-        />
+        <FieldGroup>
+          {googleDisclosure && (
+            <>
+              <GoogleSignInForm enabled />
+              <GooglePolicyDisclosure disclosure={googleDisclosure} />
+              <FieldSeparator>หรือสร้างบัญชีด้วยอีเมล</FieldSeparator>
+            </>
+          )}
+          <AuthForm
+            kind="sign-up"
+            termsVersion={currentIdentityPolicies.termsVersion}
+            privacyVersion={currentIdentityPolicies.privacyVersion}
+          />
+        </FieldGroup>
       </CardContent>
       <CardFooter className="flex-col gap-2">
         <CardDescription>มีบัญชีอยู่แล้ว?</CardDescription>

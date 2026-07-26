@@ -1,6 +1,7 @@
 import Link from "next/link"
 
 import { AuthForm } from "@/app/(auth)/_components/auth-form"
+import { GooglePolicyDisclosure } from "@/app/(auth)/_components/google-policy-disclosure"
 import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form"
 import {
   FieldDescription,
@@ -8,12 +9,15 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
+import type { GoogleOAuthDisclosure } from "@/modules/identity"
 
 export function LoginForm({
   className,
-  googleEnabled,
+  googleDisclosure,
   ...props
-}: React.ComponentProps<"div"> & { googleEnabled: boolean }) {
+}: React.ComponentProps<"div"> & {
+  googleDisclosure?: GoogleOAuthDisclosure
+}) {
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <FieldGroup>
@@ -26,10 +30,14 @@ export function LoginForm({
 
         <AuthForm kind="sign-in" />
 
-        {googleEnabled && (
+        {googleDisclosure && (
           <>
-            <FieldSeparator>หรือเข้าสู่ระบบด้วย</FieldSeparator>
+            <FieldSeparator>หรือ</FieldSeparator>
             <GoogleSignInForm enabled />
+            <GooglePolicyDisclosure
+              disclosure={googleDisclosure}
+              className="text-center"
+            />
           </>
         )}
 

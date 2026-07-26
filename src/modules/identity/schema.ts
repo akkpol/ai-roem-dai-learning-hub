@@ -27,7 +27,7 @@ export const identityAccounts = pgTable(
     createdAt: utcTimestamp("created_at").defaultNow().notNull(),
     updatedAt: utcTimestamp("updated_at").defaultNow().notNull(),
     status: text("status").default("pending_verification").notNull(),
-    ageAttestedAt: utcTimestamp("age_attested_at").notNull(),
+    ageAttestedAt: utcTimestamp("age_attested_at"),
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     closedAt: utcTimestamp("closed_at"),
   },

@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ForgotPasswordPage from "@/app/(auth)/forgot-password/page";
 import GoogleSignInErrorPage from "@/app/(auth)/sign-in/google-error/page";
@@ -8,11 +8,18 @@ import ResetPasswordPage from "@/app/(auth)/reset-password/page";
 import SignUpPage from "@/app/(auth)/sign-up/page";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 import { GoogleSignInForm } from "@/app/(auth)/_components/google-sign-in-form";
+import PrivacyPage from "@/app/privacy/page";
+import TermsPage from "@/app/terms/page";
 import LoginPage from "@/app/login/page";
+import { LoginForm } from "@/components/login-form";
 
 const render = (Page: ComponentType) => renderToStaticMarkup(createElement(Page));
 
 describe("Public authentication pages", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it.each([
     [SignUpPage, "สร้างบัญชี"],
     [LoginPage, "เข้าสู่ระบบ"],
@@ -22,12 +29,15 @@ describe("Public authentication pages", () => {
     expect(render(Page)).toContain(heading);
   });
 
-  it("uses safe credential autocomplete and explicit signup attestations", () => {
+  it("uses safe credential autocomplete and policy acceptance without an age gate", () => {
     const signup = render(SignUpPage);
     expect(signup).toContain('autoComplete="email"');
     expect(signup).toContain('autoComplete="new-password"');
-    expect(signup).toContain("อายุ 18 ปีขึ้นไป");
+    expect(signup).not.toContain("อายุ 18 ปีขึ้นไป");
+    expect(signup).not.toContain('name="ageAttested"');
     expect(signup).toContain("ข้อกำหนดการใช้งาน");
+    expect(signup).toContain('href="/terms"');
+    expect(signup).toContain('href="/privacy"');
     expect(signup).not.toContain("TOTP");
     expect(signup).not.toContain("อุปกรณ์ที่เข้าสู่ระบบ");
   });
@@ -39,14 +49,29 @@ describe("Public authentication pages", () => {
     expect(signIn).not.toContain("บัญชีของคุณอยู่ระหว่างลบ");
   });
 
-  it("offers Google login as an explicit existing-account action", () => {
+  it("offers one Google action for both new and existing accounts", () => {
     const google = renderToStaticMarkup(
       createElement(GoogleSignInForm, { enabled: true }),
     );
 
     expect(google).toContain('action="/api/auth/google"');
     expect(google).toContain('method="post"');
-    expect(google).toContain("เข้าสู่ระบบด้วย Google");
+    expect(google).toContain("ดำเนินการต่อด้วย Google");
+    const googleLogin = renderToStaticMarkup(
+      createElement(LoginForm, {
+        googleDisclosure: {
+          termsUrl: "/terms",
+          privacyUrl: "/privacy",
+        },
+      }),
+    );
+    expect(googleLogin.replace(/<[^>]+>/g, "")).toContain(
+      "เมื่อดำเนินการต่อ คุณยอมรับข้อกำหนดการใช้งานและนโยบายความเป็นส่วนตัวฉบับปัจจุบัน",
+    );
+    expect(googleLogin).toContain('href="/terms"');
+    expect(googleLogin).toContain('href="/privacy"');
+    expect(googleLogin).toContain(">ข้อกำหนดการใช้งาน</a>");
+    expect(googleLogin).toContain(">นโยบายความเป็นส่วนตัว</a>");
     expect(
       renderToStaticMarkup(
         createElement(GoogleSignInForm, { enabled: false }),
@@ -54,10 +79,35 @@ describe("Public authentication pages", () => {
     ).toBe("");
   });
 
+  it("renders the configured policy links in the Google signup disclosure", () => {
+    vi.stubEnv("AUTH_SECRET", "a".repeat(32));
+    vi.stubEnv(
+      "AUTH_BASE_URL",
+      "https://learning.example.test/api/auth",
+    );
+    vi.stubEnv("GOOGLE_CLIENT_ID", "google-client-id");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-client-secret");
+    const signup = render(SignUpPage);
+
+    expect(signup).toContain("ดำเนินการต่อด้วย Google");
+    expect(signup).toContain('href="/terms"');
+    expect(signup).toContain('href="/privacy"');
+  });
+
+  it.each([
+    [TermsPage, "ข้อกำหนดการใช้งาน"],
+    [PrivacyPage, "นโยบายความเป็นส่วนตัว"],
+  ])("publishes the current policy page", (Page, heading) => {
+    const policy = render(Page);
+    expect(policy).toContain(heading);
+    expect(policy).toContain("2026-07-26");
+    expect(policy).toContain('href="/"');
+  });
+
   it("uses a generic OAuth failure page without exposing provider details", () => {
     const errorPage = render(GoogleSignInErrorPage);
 
-    expect(errorPage).toContain("เข้าสู่ระบบด้วย Google ไม่สำเร็จ");
+    expect(errorPage).toContain("ดำเนินการต่อด้วย Google ไม่สำเร็จ");
     expect(errorPage).toContain("/login");
     expect(errorPage).not.toContain("client_secret");
     expect(errorPage).not.toContain("state=");

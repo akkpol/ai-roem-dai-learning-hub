@@ -14,7 +14,6 @@ describe("Signup command", () => {
         displayName: "  ผู้เรียนใหม่  ",
         email: " New.User@Example.TEST ",
         password: "correct-horse-battery-staple",
-        ageAttested: true,
         termsVersion: policies.termsVersion,
         privacyVersion: policies.privacyVersion,
         callbackPath: "/verify-email",
@@ -23,16 +22,17 @@ describe("Signup command", () => {
     );
     expect(command.email).toBe("new.user@example.test");
     expect(command.displayName).toBe("ผู้เรียนใหม่");
+    expect(command.acceptedAt).toBeInstanceOf(Date);
+    expect(command).not.toHaveProperty("ageAttestedAt");
   });
 
-  it("rejects missing age attestation and stale policy forms", () => {
+  it("does not require age attestation but still rejects stale policy forms", () => {
     expect(() =>
       parseSignUpCommand(
         {
           displayName: "Learner",
           email: "learner@example.test",
           password: "correct-horse-battery-staple",
-          ageAttested: false,
           termsVersion: "old-terms",
           privacyVersion: policies.privacyVersion,
           callbackPath: "/verify-email",
@@ -50,7 +50,6 @@ describe("Signup command", () => {
           displayName: "",
           email: "invalid",
           password,
-          ageAttested: true,
           termsVersion: policies.termsVersion,
           privacyVersion: policies.privacyVersion,
           callbackPath: "https://evil.example",

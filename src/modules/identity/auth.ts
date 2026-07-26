@@ -21,6 +21,19 @@ export type TransactionAuthCallbacks = {
   }): Promise<void>;
   afterEmailVerification?(user: { id: string }): Promise<void>;
   afterPasswordReset?(user: { id: string }): Promise<void>;
+  beforeGoogleUserCreate?(user: {
+    id: string;
+    name: string;
+    email: string;
+    emailVerified: boolean;
+  }): Promise<{ status: "active" }>;
+  afterGoogleUserCreate?(user: {
+    id: string;
+    name: string;
+    email: string;
+    emailVerified: boolean;
+  }): Promise<void>;
+  beforeGoogleSessionCreate?(userId: string): Promise<void>;
 };
 
 export type TransactionAuthOptions = {
@@ -49,7 +62,7 @@ export function createTransactionAuth(
           google: {
             clientId: config.googleOAuth.clientId,
             clientSecret: config.googleOAuth.clientSecret,
-            disableSignUp: true,
+            disableSignUp: false,
             prompt: "select_account",
           },
         }
@@ -58,6 +71,24 @@ export function createTransactionAuth(
       encryptOAuthTokens: true,
     },
     databaseHooks: {
+      user: options.googleOAuthCallback
+        ? {
+            create: {
+              before: async (user) => {
+                if (!callbacks.beforeGoogleUserCreate) return false;
+                return {
+                  data: await callbacks.beforeGoogleUserCreate(user),
+                };
+              },
+              after: async (user) => {
+                if (!callbacks.afterGoogleUserCreate) {
+                  throw new Error("Google onboarding callback is unavailable");
+                }
+                await callbacks.afterGoogleUserCreate(user);
+              },
+            },
+          }
+        : undefined,
       session: {
         create: {
           before: async (session) => {
@@ -68,11 +99,20 @@ export function createTransactionAuth(
               })
               .from(identityAccounts)
               .where(eq(identityAccounts.id, session.userId));
-            return (
+            const sessionAllowed =
               account[0]?.status === "active" &&
               (!options.googleOAuthCallback ||
-                account[0]?.twoFactorEnabled === false)
-            );
+                account[0]?.twoFactorEnabled === false);
+            if (!sessionAllowed) return false;
+            if (options.googleOAuthCallback) {
+              if (!callbacks.beforeGoogleSessionCreate) {
+                throw new Error(
+                  "Google policy acceptance callback is unavailable",
+                );
+              }
+              await callbacks.beforeGoogleSessionCreate(session.userId);
+            }
+            return true;
           },
         },
       },
@@ -85,7 +125,6 @@ export function createTransactionAuth(
           defaultValue: "pending_verification",
           input: false,
         },
-        ageAttestedAt: { type: "date", required: true },
       },
       deleteUser: { enabled: false },
     },

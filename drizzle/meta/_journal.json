@@ -36,6 +36,13 @@
       "when": 1784834547356,
       "tag": "0004_identity_operations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785016417821,
+      "tag": "0005_google_oauth_signup",
+      "breakpoints": true
     }
   ]
 }

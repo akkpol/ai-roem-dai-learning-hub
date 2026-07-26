@@ -16,6 +16,12 @@ const {
       clientId: "google-client-id",
       clientSecret: "google-client-secret",
     },
+    currentPolicies: {
+      termsVersion: "terms-v1",
+      privacyVersion: "privacy-v1",
+      termsUrl: "/terms",
+      privacyUrl: "/privacy",
+    },
   };
   return {
     coreConfig,

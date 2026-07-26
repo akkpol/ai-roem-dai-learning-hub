@@ -14,7 +14,7 @@ export type SignUpCommand = {
   displayName: string;
   email: string;
   password: string;
-  ageAttestedAt: Date;
+  acceptedAt: Date;
   termsVersion: string;
   privacyVersion: string;
   callbackPath: string;
@@ -34,7 +34,6 @@ export function parseSignUpCommand(
         displayName: z.string().trim().min(1).max(120),
         email,
         password,
-        ageAttested: z.literal(true),
         termsVersion: z.literal(currentPolicies.termsVersion),
         privacyVersion: z.literal(currentPolicies.privacyVersion),
         callbackPath: z.string().transform(assertRelativeCallbackPath),
@@ -44,7 +43,7 @@ export function parseSignUpCommand(
       displayName: value.displayName,
       email: value.email,
       password: value.password,
-      ageAttestedAt: now,
+      acceptedAt: now,
       termsVersion: value.termsVersion,
       privacyVersion: value.privacyVersion,
       callbackPath: value.callbackPath,

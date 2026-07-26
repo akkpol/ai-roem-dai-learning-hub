@@ -54,7 +54,6 @@ describe("SESSION-003 authentication acceptance", () => {
         displayName: "Acceptance Learner",
         email,
         password: "correct-horse-battery-staple-old",
-        ageAttested: true,
         termsVersion: config.termsVersion,
         privacyVersion: config.privacyVersion,
         callbackPath: "/verify-email",

@@ -4,6 +4,7 @@ import {
   assertRelativeCallbackPath,
   normalizeEmail,
   readCoreAuthConfig,
+  readGoogleOAuthDisclosure,
   readIdentityConfig,
 } from "@/modules/identity/config";
 
@@ -12,13 +13,11 @@ const valid = {
   AUTH_BASE_URL: "https://learning.example.test/api/auth",
   AUTH_EMAIL_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   AUTH_EMAIL_KEY_VERSION: "auth-email-v1",
-  AUTH_TERMS_VERSION: "terms-2026-07",
-  AUTH_PRIVACY_VERSION: "privacy-2026-07",
   AUTH_EMAIL_FROM: "Learning Hub <auth@learn.example.test>",
 };
 
 describe("Identity configuration", () => {
-  it("reads only core auth settings for Google existing-account login", () => {
+  it("reads only core auth settings for the unified Google flow", () => {
     const coreOnly = {
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://learning.example.test/api/auth",
@@ -32,6 +31,12 @@ describe("Identity configuration", () => {
       googleOAuth: {
         clientId: "google-client-id",
         clientSecret: "google-client-secret",
+      },
+      currentPolicies: {
+        termsVersion: "2026-07-26",
+        privacyVersion: "2026-07-26",
+        termsUrl: "/terms",
+        privacyUrl: "/privacy",
       },
       trustedProxy: "none",
     });
@@ -82,11 +87,30 @@ describe("Identity configuration", () => {
     ).toThrow("identity configuration is invalid");
   });
 
+  it("uses the published code-owned policy for Google OAuth", () => {
+    const google = {
+      AUTH_SECRET: "a".repeat(32),
+      AUTH_BASE_URL: "https://learning.example.test/api/auth",
+      GOOGLE_CLIENT_ID: "google-client-id",
+      GOOGLE_CLIENT_SECRET: "google-client-secret",
+    };
+
+    expect(
+      readGoogleOAuthDisclosure({
+        ...google,
+        AUTH_TERMS_URL: "https://untrusted.example/terms",
+      }),
+    ).toEqual({
+      termsUrl: "/terms",
+      privacyUrl: "/privacy",
+    });
+  });
+
   it("reads validated auth and policy configuration", () => {
     const config = readIdentityConfig(valid);
     expect(config.authSecret).toHaveLength(32);
     expect(config.emailEncryptionKey).toHaveLength(32);
-    expect(config.termsVersion).toBe("terms-2026-07");
+    expect(config.termsVersion).toBe("2026-07-26");
     expect(config.trustedProxy).toBe("none");
     expect(readIdentityConfig({ ...valid, VERCEL: "1" }).trustedProxy).toBe(
       "vercel",

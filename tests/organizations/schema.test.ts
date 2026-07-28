@@ -57,4 +57,14 @@ describe("organization persistence schema", () => {
       /GRANT[^;]*(DELETE|UPDATE)[^;]*organization_audit_events/i,
     );
   });
+
+  it("grants membership reads only to the workspace fields", () => {
+    const migration = readFileSync("drizzle/0006_organization_workspace.sql", "utf8");
+    expect(migration).toContain(
+      "GRANT SELECT (\n  organization_id,\n  account_id,\n  role,\n  status\n) ON TABLE organization_memberships TO learning_hub_app",
+    );
+    expect(migration).not.toContain(
+      "GRANT SELECT ON TABLE organization_memberships TO learning_hub_app",
+    );
+  });
 });

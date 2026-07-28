@@ -96,6 +96,25 @@ it("allows only the organization runtime lifecycle writes and keeps audits appen
     [organizationId, accountId],
   );
   await expect(
+    appClient.query(
+      "select organization_id,account_id,role,status from organization_memberships where organization_id = $1 and account_id = $2",
+      [organizationId, accountId],
+    ),
+  ).resolves.toMatchObject({
+    rows: [{
+      organization_id: organizationId,
+      account_id: accountId,
+      role: "owner",
+      status: "active",
+    }],
+  });
+  await expect(
+    appClient.query("select removed_at from organization_memberships where organization_id = $1", [organizationId]),
+  ).rejects.toThrow();
+  await expect(
+    appClient.query("select id from organization_memberships where organization_id = $1", [organizationId]),
+  ).rejects.toThrow();
+  await expect(
     appClient.query("update organization_audit_events set action = 'forged' where false"),
   ).rejects.toThrow();
   await expect(

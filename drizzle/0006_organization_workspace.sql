@@ -98,7 +98,12 @@ GRANT UPDATE (
   updated_at
 ) ON TABLE organizations TO learning_hub_app;
 --> statement-breakpoint
-GRANT SELECT ON TABLE organization_memberships TO learning_hub_app;
+GRANT SELECT (
+  organization_id,
+  account_id,
+  role,
+  status
+) ON TABLE organization_memberships TO learning_hub_app;
 --> statement-breakpoint
 GRANT INSERT (
   organization_id,

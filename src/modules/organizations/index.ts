@@ -23,6 +23,17 @@ export {
   isValidOrganizationSlug,
   normalizeOrganizationSlug,
 } from "./domain";
+export { createOrganizationService } from "./service";
+export type {
+  OrganizationOperationResult,
+  OrganizationServiceDependencies,
+  OrganizationWorkspaceDto,
+} from "./service";
+export {
+  organizationAuditEvents,
+  organizationMemberships,
+  organizations,
+} from "./schema";
 export type {
   OrganizationActor,
   OrganizationAuthorizationDecision,

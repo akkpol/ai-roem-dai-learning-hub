@@ -1,5 +1,13 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import {
+  loadOrganizationList,
+  loadOrganizationWorkspace,
+  organizationListView,
+  organizationWorkspaceView,
+  updateOrganizationIdentity,
+} from "@/app/(workspace)/organizations/_components/organization-client";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
@@ -24,15 +32,40 @@ describe("organization workspace pages", () => {
     expect(forms).not.toMatch(/<button\b|<input\b|<textarea\b|<select\b|<label\b/);
   });
 
-  it("covers loading, empty, retry, forbidden and stale-update states without fake dashboard metrics", () => {
+  it("uses real request state helpers for loading, empty, retry, forbidden and stale-update states", async () => {
     const workspace = read("src/app/(workspace)/organizations/_components/organization-workspace.tsx");
     const forms = read("src/app/(workspace)/organizations/_components/organization-forms.tsx");
     expect(workspace).toContain('from "@/components/ui/skeleton"');
     expect(workspace).toContain("EmptyMedia");
+    expect(organizationListView({ kind: "loading" })).toBe("loading");
+    expect(organizationListView({ kind: "success", organizations: [] })).toBe("empty");
+    expect(organizationListView({ kind: "error", message: "offline", status: 500 })).toBe("retry");
+    expect(organizationWorkspaceView({ kind: "error", message: "forbidden", status: 403 })).toBe("forbidden");
     expect(workspace).toContain("ลองอีกครั้ง");
     expect(workspace).toContain("ไม่อนุญาต");
     expect(forms).toContain("stale_version");
-    expect(forms).toContain("slug");
     expect(workspace).not.toMatch(/รายได้|ผู้เรียนทั้งหมด|conversion/i);
+
+    const fetchMock = vi.fn(async (...args: [RequestInfo | URL, RequestInit?]) => {
+      void args;
+      return new Response(JSON.stringify({ organizations: [] }), { status: 200 });
+    });
+    await expect(loadOrganizationList(fetchMock)).resolves.toEqual({ kind: "success", organizations: [] });
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: "ไม่มีสิทธิ์" }), { status: 403 }));
+    await expect(loadOrganizationWorkspace(fetchMock, "00000000-0000-4000-8000-000000000003")).resolves.toMatchObject({ kind: "error", status: 403 });
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ organization: { id: "00000000-0000-4000-8000-000000000003" } }), { status: 200 }));
+    await expect(updateOrganizationIdentity(fetchMock, "00000000-0000-4000-8000-000000000003", {
+      displayName: "ชื่อใหม่", slug: "immutable-slug", description: "", contactEmail: "owner@example.test", locale: "th-TH", timeZone: "Asia/Bangkok",
+    }, 3)).resolves.toMatchObject({ ok: true });
+    expect(JSON.parse(fetchMock.mock.calls[2]?.[1]?.body as string)).toEqual({
+      displayName: "ชื่อใหม่", description: null, contactEmail: "owner@example.test", locale: "th-TH", timeZone: "Asia/Bangkok", expectedVersion: 3,
+    });
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ code: "stale_version", message: "โหลดใหม่" }), { status: 409 }));
+    await expect(updateOrganizationIdentity(fetchMock, "00000000-0000-4000-8000-000000000003", {
+      displayName: "ชื่อใหม่", slug: "immutable-slug", description: "", contactEmail: "owner@example.test", locale: "th-TH", timeZone: "Asia/Bangkok",
+    }, 3)).resolves.toMatchObject({ ok: false, code: "stale_version" });
   });
 });

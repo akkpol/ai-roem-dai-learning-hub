@@ -8,7 +8,7 @@ import type {
   OrganizationError,
   UpdateOrganizationIdentityCommand,
 } from "./contracts";
-import { createOrganizationService, type OrganizationOperationResult } from "./service";
+import { createOrganizationService, type OrganizationOperationResult, type OrganizationWorkspaceDto } from "./service";
 
 type OrganizationHttpService = {
   createOrganization(
@@ -101,6 +101,14 @@ function resultResponse(result: OrganizationOperationResult<unknown>): Response 
   return errorResponse(403, "ไม่อนุญาตให้ดำเนินการ");
 }
 
+function workspaceResponse(result: OrganizationOperationResult<unknown>): Response {
+  if (!result.ok) return resultResponse(result);
+  const workspace = result.value as OrganizationWorkspaceDto;
+  if (workspace.membership.role !== "member") return Response.json(workspace);
+  const organization = { ...workspace.organization, contactEmail: undefined };
+  return Response.json({ ...workspace, organization });
+}
+
 export function createOrganizationHttpHandlers(dependencies: OrganizationHttpDependencies) {
   const trusted = new URL(dependencies.trustedOrigin).origin;
   const rejectTarget = (request: Request) =>
@@ -129,9 +137,13 @@ export function createOrganizationHttpHandlers(dependencies: OrganizationHttpDep
       if (target) return target;
       const actor = await withActor(request);
       if (actor instanceof Response) return actor;
-      const result = await dependencies.service.listOrganizationsForActor(actor);
-      if (!result.ok) return resultResponse(result);
-      return Response.json({ organizations: result.value });
+      try {
+        const result = await dependencies.service.listOrganizationsForActor(actor);
+        if (!result.ok) return resultResponse(result);
+        return Response.json({ organizations: result.value });
+      } catch {
+        return errorResponse(500, "ไม่สามารถโหลดองค์กรได้ในขณะนี้");
+      }
     },
     createOrganization: async (request: Request) => {
       const rejected = rejectMutation(request);
@@ -154,7 +166,7 @@ export function createOrganizationHttpHandlers(dependencies: OrganizationHttpDep
       if (actor instanceof Response) return actor;
       try {
         const result = await dependencies.service.getOrganizationWorkspace(actor, organizationIdInput.parse(organizationId));
-        return resultResponse(result);
+        return workspaceResponse(result);
       } catch (error) {
         return error instanceof z.ZodError ? invalidInput(error) : errorResponse(500, "ไม่สามารถโหลดองค์กรได้ในขณะนี้");
       }

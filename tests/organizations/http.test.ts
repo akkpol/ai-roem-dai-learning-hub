@@ -103,4 +103,42 @@ describe("organization HTTP boundary", () => {
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({ code: "stale_version" });
   });
+
+  it("returns a safe 500 when listing organizations throws", async () => {
+    const create = service();
+    create.listOrganizationsForActor.mockRejectedValueOnce(new Error("database unavailable"));
+    const handlers = createOrganizationHttpHandlers({ service: create, requireActor: vi.fn(async () => actor), trustedOrigin: "https://learning.example.test" });
+
+    const response = await handlers.listOrganizations(new Request("https://learning.example.test/api/organizations"));
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ status: false, message: "ไม่สามารถโหลดองค์กรได้ในขณะนี้" });
+  });
+
+  it("redacts contact email from a read-only member workspace response", async () => {
+    const create = service();
+    create.getOrganizationWorkspace.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        organization: {
+          id: organizationId,
+          displayName: "สถาบันทดสอบ",
+          slug: "test-academy",
+          description: null,
+          contactEmail: "owner@example.test",
+          locale: "th-TH",
+          timeZone: "Asia/Bangkok",
+          status: "active",
+          version: 1,
+        },
+        membership: { organizationId, accountId: actor.accountId, role: "member", status: "active" },
+      },
+    } as never);
+    const handlers = createOrganizationHttpHandlers({ service: create, requireActor: vi.fn(async () => actor), trustedOrigin: "https://learning.example.test" });
+
+    const response = await handlers.getOrganization(new Request(`https://learning.example.test/api/organizations/${organizationId}`), organizationId);
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).organization).not.toHaveProperty("contactEmail");
+  });
 });

@@ -10,7 +10,7 @@ export default function OrganizationsLayout({ children }: { children: React.Reac
           <Building2Icon data-icon="inline-start" />
           องค์กรของฉัน
         </LinkButton>
-        <LinkButton href="/organizations/new" size="lg">
+        <LinkButton href="/organizations/new" size="lg" className="min-h-11">
           <PlusIcon data-icon="inline-start" />
           สร้างองค์กร
         </LinkButton>

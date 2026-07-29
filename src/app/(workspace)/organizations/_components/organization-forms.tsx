@@ -13,10 +13,16 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { OrganizationWorkspaceDto } from "@/modules/organizations";
 
-type FieldErrors = Record<string, string>;
-type Feedback = { tone: "success" | "error"; message: string; code?: string; fieldErrors?: FieldErrors } | null;
+import {
+  loadOrganizationWorkspace,
+  type OrganizationIdentityValues,
+  updateOrganizationIdentity,
+} from "./organization-client";
 
-const initialValues = {
+type FieldErrors = Record<string, string>;
+type Feedback = { tone: "success" | "error"; message: string; code?: string; status?: number; fieldErrors?: FieldErrors } | null;
+
+const initialValues: OrganizationIdentityValues = {
   displayName: "",
   slug: "",
   description: "",
@@ -30,6 +36,7 @@ function errorFromResponse(status: number, body: unknown, fallback: string): Fee
   return {
     tone: "error",
     message: value?.message ?? fallback,
+    status,
     code: value?.code,
     fieldErrors: value?.fieldErrors,
   };
@@ -115,7 +122,7 @@ function FeedbackAlert({ feedback }: { feedback: Feedback }) {
 }
 
 function SubmitButton({ busy, children, pending }: { busy: boolean; children: string; pending: string }) {
-  return <Button type="submit" size="lg" isDisabled={busy}>
+  return <Button type="submit" size="lg" className="min-h-11" isDisabled={busy}>
     {busy ? <Spinner data-icon="inline-start" /> : <LoaderCircleIcon data-icon="inline-start" />}
     {busy ? pending : children}
   </Button>;
@@ -151,10 +158,9 @@ export function OrganizationSettingsForm({ organizationId }: { organizationId: s
   const load = useCallback(async () => {
     setLoading(true); setFeedback(null);
     try {
-      const response = await fetch(`/api/organizations/${organizationId}`);
-      const body = await responseJson(response);
-      if (!response.ok) { setFeedback(errorFromResponse(response.status, body, "ไม่สามารถโหลดองค์กรได้")); return; }
-      const data = body as OrganizationWorkspaceDto;
+      const result = await loadOrganizationWorkspace(fetch, organizationId);
+      if (result.kind === "error") { setFeedback({ tone: "error", ...result }); return; }
+      const data = result.workspace;
       setWorkspace(data); setValues({ displayName: data.organization.displayName, slug: data.organization.slug, description: data.organization.description ?? "", contactEmail: data.organization.contactEmail, locale: data.organization.locale, timeZone: data.organization.timeZone });
     } catch { setFeedback({ tone: "error", message: "เชื่อมต่อไม่สำเร็จ กรุณาลองอีกครั้ง" }); }
     finally { setLoading(false); }
@@ -164,16 +170,16 @@ export function OrganizationSettingsForm({ organizationId }: { organizationId: s
     event.preventDefault(); if (!workspace) return;
     setBusy(true); setFeedback(null);
     try {
-      const response = await fetch(`/api/organizations/${organizationId}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...values, description: values.description || null, expectedVersion: workspace.organization.version }) });
-      const body = await responseJson(response);
-      if (!response.ok) { setFeedback(errorFromResponse(response.status, body, "ไม่สามารถบันทึกองค์กรได้")); return; }
-      setWorkspace(body as OrganizationWorkspaceDto); setFeedback({ tone: "success", message: "บันทึกข้อมูลองค์กรแล้ว" });
+      const result = await updateOrganizationIdentity(fetch, organizationId, values, workspace.organization.version);
+      if (!result.ok) { setFeedback({ tone: "error", ...result }); return; }
+      setWorkspace(result.workspace); setFeedback({ tone: "success", message: "บันทึกข้อมูลองค์กรแล้ว" });
     } catch { setFeedback({ tone: "error", message: "เชื่อมต่อไม่สำเร็จ กรุณาลองอีกครั้ง" }); }
     finally { setBusy(false); }
   }
   if (loading) return <p className="flex items-center gap-2 text-muted-foreground"><Spinner />กำลังโหลดข้อมูลองค์กร…</p>;
-  if (!workspace) return <div className="flex flex-col gap-3"><FeedbackAlert feedback={feedback} /><Button variant="outline" onPress={() => void load()}>ลองอีกครั้ง</Button></div>;
+  if (!workspace && feedback?.status === 403) return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>คุณไม่มีสิทธิ์เปิดการตั้งค่าองค์กรนี้</AlertDescription></Alert>;
+  if (!workspace) return <div className="flex flex-col gap-3"><FeedbackAlert feedback={feedback} /><Button variant="outline" className="min-h-11" onPress={() => void load()}>ลองอีกครั้ง</Button></div>;
   const canEdit = workspace.membership.role === "owner" || workspace.membership.role === "manager";
   if (!canEdit) return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>เฉพาะเจ้าของหรือผู้จัดการองค์กรเท่านั้นที่แก้ไขข้อมูลนี้ได้</AlertDescription></Alert>;
-  return <Card><CardHeader><CardTitle>ข้อมูลที่แสดง</CardTitle><CardDescription>ชื่อ URL: {workspace.organization.slug}</CardDescription></CardHeader><CardContent><form onSubmit={submit}><FieldGroup><IdentityFields values={values} setValues={setValues} errors={feedback?.fieldErrors} disabled={busy} includeSlug={false} /><SubmitButton busy={busy} pending="กำลังบันทึก">บันทึกการเปลี่ยนแปลง</SubmitButton>{feedback?.code === "stale_version" ? <Button type="button" variant="outline" onPress={() => void load()}>โหลดข้อมูลใหม่</Button> : null}<FeedbackAlert feedback={feedback} /></FieldGroup></form></CardContent></Card>;
+  return <Card><CardHeader><CardTitle>ข้อมูลที่แสดง</CardTitle><CardDescription>ชื่อ URL: {workspace.organization.slug}</CardDescription></CardHeader><CardContent><form onSubmit={submit}><FieldGroup><IdentityFields values={values} setValues={setValues} errors={feedback?.fieldErrors} disabled={busy} includeSlug={false} /><SubmitButton busy={busy} pending="กำลังบันทึก">บันทึกการเปลี่ยนแปลง</SubmitButton>{feedback?.code === "stale_version" ? <Button type="button" variant="outline" className="min-h-11" onPress={() => void load()}>โหลดข้อมูลใหม่</Button> : null}<FeedbackAlert feedback={feedback} /></FieldGroup></form></CardContent></Card>;
 }

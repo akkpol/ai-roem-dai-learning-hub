@@ -194,12 +194,16 @@ it("enforces unique slug and one active membership without partial writes", asyn
   ).resolves.toMatchObject({ rows: [{ role: "owner", status: "active" }] });
 });
 
-it("rejects an update when a membership downgrade commits while its row is locked", async () => {
+it("rejects an update when a future membership writer commits under the organization aggregate lock", async () => {
   const { organizationId, accountId } = await createActiveOrganization();
   const service = createOrganizationService(connection.db);
   const currentActor: Actor = { ...actor(), accountId };
   await migrationClient.query("begin");
   try {
+    await migrationClient.query(
+      "select id from organizations where id = $1 for update",
+      [organizationId],
+    );
     await migrationClient.query(
       "update organization_memberships set role = 'member' where organization_id = $1 and account_id = $2",
       [organizationId, accountId],

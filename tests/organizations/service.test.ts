@@ -37,7 +37,7 @@ function repository(): OrganizationRepository {
     findOrganizationById: vi.fn(async () => null),
     findActiveMembership: vi.fn(async () => null),
     lockOrganizationForUpdate: vi.fn(async () => null),
-    lockActiveMembershipForUpdate: vi.fn(async () => null),
+    readActiveMembershipUnderOrganizationLock: vi.fn(async () => null),
     updateOrganizationIdentity: vi.fn(async () => null),
   };
 }
@@ -118,7 +118,7 @@ describe("organization service", () => {
 
   it("returns the stable stale-version error instead of overwriting", async () => {
     const store = repository();
-    vi.mocked(store.lockActiveMembershipForUpdate).mockResolvedValue({
+    vi.mocked(store.readActiveMembershipUnderOrganizationLock).mockResolvedValue({
       organizationId: "00000000-0000-4000-8000-000000000010",
       accountId: actor.accountId,
       role: "owner",
@@ -164,7 +164,7 @@ describe("organization service", () => {
       status: "active",
       version: 1,
     });
-    vi.mocked(store.lockActiveMembershipForUpdate).mockResolvedValue({
+    vi.mocked(store.readActiveMembershipUnderOrganizationLock).mockResolvedValue({
       organizationId: "00000000-0000-4000-8000-000000000010",
       accountId: actor.accountId,
       role: "member",

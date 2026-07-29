@@ -67,4 +67,13 @@ describe("organization persistence schema", () => {
       "GRANT SELECT ON TABLE organization_memberships TO learning_hub_app",
     );
   });
+
+  it("keeps runtime inserts to explicitly granted columns and serializes membership through the organization aggregate", () => {
+    const repository = readFileSync("src/modules/organizations/repository.ts", "utf8");
+    expect(repository).toContain('insert into ${organizations} (\n    "display_name", "slug", "description", "contact_email", "locale", "time_zone"\n  )');
+    expect(repository).toContain('insert into ${organizationMemberships} (\n    "organization_id", "account_id", "role", "status"\n  )');
+    expect(repository).toContain('insert into ${organizationAuditEvents} (\n    "organization_id", "actor_account_id", "action", "payload", "occurred_at"\n  )');
+    expect(repository).not.toContain("lockActiveMembershipForUpdate");
+    expect(repository).toContain("readActiveMembershipUnderOrganizationLock");
+  });
 });

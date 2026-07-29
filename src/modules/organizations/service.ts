@@ -238,7 +238,10 @@ export function createOrganizationService(
           command.organizationId,
         );
         if (!organization) return { kind: "not_found" as const };
-        const membership = await repository.lockActiveMembershipForUpdate(
+        // Organization is the aggregate serialization lock. Membership writers
+        // must hold it before changing roles/status, so this read sees their
+        // committed state without granting the app role membership UPDATE.
+        const membership = await repository.readActiveMembershipUnderOrganizationLock(
           transaction,
           command.organizationId,
           actor.accountId,

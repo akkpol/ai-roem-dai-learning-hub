@@ -2,8 +2,8 @@
 
 **Committed parent before Task 4 evidence:** `9aeb61f2ce59dd6763bf913308965958b5e05158`
 
-**Evidence candidate:** the final allowed R3 remediation commit
-(`fix(organizations): enforce server workspace privacy`). This document records
+**Evidence candidate:** the provider-grant repair commit
+(`fix(organizations): honor runtime database grants`). This document records
 local and intercepted acceptance only; independent R3 review and provider CI
 remain required.
 
@@ -28,6 +28,10 @@ independent review verdict and it does not make WP-02 verified.
   `owner` and `manager` retain it for settings. Primary workspace/list content
   now stays in Server Components; the only read retry client island calls
   `router.refresh()` and owns no workspace DTO or primary-data fetch.
+- Runtime creates use explicit SQL columns that match the existing app-role
+  grants. Identity updates serialize on the locked organization aggregate and
+  read membership normally under that lock; no membership UPDATE grant is
+  introduced.
 - This session deliberately excludes invitations/role management, instructor
   applications, reviewer workflow, and Production demo data.
 
@@ -52,12 +56,12 @@ independent review verdict and it does not make WP-02 verified.
 | Architecture | PASS | `npm run architecture` | R3 remediation candidate. |
 | Lint | PASS | `npm run lint` | R3 remediation candidate. |
 | Typecheck | PASS | `npm run typecheck` | R3 remediation candidate. |
-| Focused unit tests | PASS | `npx vitest run tests/organizations --reporter=verbose` | 6 files / 29 tests. CI must validate the exact committed head. |
-| PostgreSQL integration | BLOCKED | `npm run test:integration` requires approved disposable paired URLs | No safe target credentials or reset acknowledgement were provided locally. |
+| Focused unit tests | PASS | `npx vitest run tests/organizations --reporter=verbose` | 6 files / 30 tests. CI must validate the exact committed head. |
+| PostgreSQL integration | BLOCKED locally / FAILED on prior PR head | PR #21 provider gate on `602439f` reported `42501` for Drizzle default-column INSERT and membership `FOR UPDATE` | Repair preserves least privilege with explicit SQL inserts and organization aggregate locking; rerun must prove the exact repair head. No safe local paired URLs/reset acknowledgement were provided. |
 | Provider preflight | BLOCKED | `npx tsx scripts/database/provider-preflight.ts` requires the same approved Neon identity | No preflight bypass or mock target was used. CI classifier already selects the provider gate because this candidate changes `drizzle/**` and `tests/integration/**`. |
 | Bounded UI E2E | PASS | `npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --reporter=list` | 4 passed / 2 real-stack cases skipped against rebuilt local production server `http://127.0.0.1:3901`; intercepted UI-state evidence only. |
 | Real-stack E2E | BLOCKED | Requires authenticated disposable owner fixture and explicit mutation opt-in | No session/fixture was provided. |
-| Production build | PASS | `npm run build` | Final R3 remediation candidate; completed in 78.2 s (only existing multi-lockfile root warning). |
+| Production build | PASS | `npm run build` | Provider-grant repair candidate; completed in 100.1 s (only existing multi-lockfile root warning). |
 | Production dependency audit | PASS | `npm audit --omit=dev --audit-level=high` | Exit 0; 4 moderate `esbuild` development-tool advisories, no high/critical production audit failure. |
 | Browser/IAB desktop 1440×900 | PASS (safe retry state) | Controller final quick reacceptance on exact rebuilt local server `http://127.0.0.1:3901` | `/organizations` Server Component rendered the safe retry state `ไม่สามารถโหลดองค์กรได้ในขณะนี้` with missing Identity config; retry is the only client interaction, console is clean, and `innerWidth=scrollWidth=1440`. It is not a real authenticated workspace proof. |
 | Browser/IAB mobile 390×844 | PASS (safe retry state and create validation) | Controller final quick reacceptance on exact rebuilt local server | `/organizations` rendered server safe retry state with only the retry button interactive; console clean and `width=scrollWidth=390`. Separate `/organizations/new` blank submit showed three field alerts plus summary; navigation/form controls were exactly 44 px, no console warning/error, and `scrollWidth=375 <= 390`. |

@@ -29,7 +29,7 @@ export {
   loadOrganizationListForServer,
   loadOrganizationWorkspaceForServer,
 } from "./http";
-export type { OrganizationListServerState, OrganizationWorkspaceServerState } from "./http";
+export type { OrganizationListServerState, OrganizationWorkspaceServerState, OrganizationWorkspaceView } from "./http";
 export type {
   OrganizationOperationResult,
   OrganizationServiceDependencies,

@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { AuthenticationRequiredError } from "@/modules/identity";
-import { createOrganizationHttpHandlers } from "@/modules/organizations/http";
+import {
+  createOrganizationHttpHandlers,
+  projectOrganizationWorkspace,
+  toOrganizationWorkspaceServerState,
+} from "@/modules/organizations/http";
 import type { Actor } from "@/modules/identity";
 
 const actor: Actor = {
@@ -159,5 +163,38 @@ describe("organization HTTP boundary", () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).organization).not.toHaveProperty("contactEmail");
+  });
+
+  it("uses the same safe workspace projection for HTTP and server reads", async () => {
+    const workspace = {
+      organization: {
+        id: organizationId,
+        displayName: "สถาบันทดสอบ",
+        slug: "test-academy",
+        description: null,
+        contactEmail: "owner@example.test",
+        locale: "th-TH" as const,
+        timeZone: "Asia/Bangkok",
+        status: "active" as const,
+        version: 1,
+      },
+      membership: { organizationId, accountId: actor.accountId, role: "member" as const, status: "active" as const },
+    };
+    const member = projectOrganizationWorkspace(workspace);
+    expect(member.organization).not.toHaveProperty("contactEmail");
+    const serverMember = toOrganizationWorkspaceServerState(workspace);
+    expect(serverMember).toMatchObject({ kind: "success" });
+    if (serverMember.kind === "success") expect(serverMember.workspace.organization).not.toHaveProperty("contactEmail");
+
+    const manager = projectOrganizationWorkspace({
+      ...workspace,
+      membership: { ...workspace.membership, role: "manager" as const },
+    });
+    expect(manager.organization).toHaveProperty("contactEmail", "owner@example.test");
+    const serverManager = toOrganizationWorkspaceServerState({
+      ...workspace,
+      membership: { ...workspace.membership, role: "manager" },
+    });
+    if (serverManager.kind === "success") expect(serverManager.workspace.organization).toHaveProperty("contactEmail", "owner@example.test");
   });
 });

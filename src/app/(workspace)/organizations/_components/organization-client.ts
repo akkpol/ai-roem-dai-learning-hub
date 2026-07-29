@@ -18,9 +18,11 @@ export type OrganizationListRequest =
   | { kind: "success"; organizations: OrganizationSummaryDto[] }
   | { kind: "error"; message: string; status?: number };
 
-export type OrganizationWorkspaceRequest =
-  | { kind: "success"; workspace: OrganizationWorkspaceDto }
+export type OrganizationWorkspaceState<TWorkspace> =
+  | { kind: "success"; workspace: TWorkspace }
   | { kind: "error"; message: string; status?: number; code?: string; fieldErrors?: Record<string, string> };
+
+export type OrganizationWorkspaceRequest = OrganizationWorkspaceState<OrganizationWorkspaceDto>;
 
 export type OrganizationCreateRequest =
   | { ok: true; workspace: OrganizationWorkspaceDto }
@@ -142,7 +144,7 @@ export function organizationListView(state: { kind: "loading" } | OrganizationLi
   return state.organizations.length === 0 ? "empty" : "content";
 }
 
-export function organizationWorkspaceView(state: { kind: "loading" } | OrganizationWorkspaceRequest) {
+export function organizationWorkspaceView<TWorkspace>(state: { kind: "loading" } | OrganizationWorkspaceState<TWorkspace>) {
   if (state.kind === "loading") return "loading";
   return state.kind === "error" ? (state.status === 403 ? "forbidden" : "retry") : "content";
 }

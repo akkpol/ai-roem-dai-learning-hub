@@ -32,8 +32,12 @@ export type OrganizationListServerState =
   | { kind: "error"; message: string; status?: number };
 
 export type OrganizationWorkspaceServerState =
-  | { kind: "success"; workspace: OrganizationWorkspaceDto }
+  | { kind: "success"; workspace: OrganizationWorkspaceView }
   | { kind: "error"; message: string; status?: number };
+
+export type OrganizationWorkspaceView = Omit<OrganizationWorkspaceDto, "organization"> & {
+  organization: Omit<OrganizationWorkspaceDto["organization"], "contactEmail"> & { contactEmail?: string };
+};
 
 const createInput = z
   .object({
@@ -110,12 +114,22 @@ function resultResponse(result: OrganizationOperationResult<unknown>): Response 
   return errorResponse(403, "ไม่อนุญาตให้ดำเนินการ");
 }
 
+/** One boundary projection for every reader; members never receive contact email. */
+export function projectOrganizationWorkspace(workspace: OrganizationWorkspaceDto): OrganizationWorkspaceView {
+  if (workspace.membership.role !== "member") return workspace;
+  const { contactEmail, ...organization } = workspace.organization;
+  void contactEmail;
+  return { ...workspace, organization };
+}
+
+export function toOrganizationWorkspaceServerState(workspace: OrganizationWorkspaceDto): OrganizationWorkspaceServerState {
+  return { kind: "success", workspace: projectOrganizationWorkspace(workspace) };
+}
+
 function workspaceResponse(result: OrganizationOperationResult<unknown>): Response {
   if (!result.ok) return resultResponse(result);
   const workspace = result.value as OrganizationWorkspaceDto;
-  if (workspace.membership.role !== "member") return Response.json(workspace);
-  const organization = { ...workspace.organization, contactEmail: undefined };
-  return Response.json({ ...workspace, organization });
+  return Response.json(projectOrganizationWorkspace(workspace));
 }
 
 function serverError(result: OrganizationOperationResult<unknown>): { message: string; status: number } {
@@ -164,7 +178,7 @@ export async function loadOrganizationWorkspaceForServer(
     const { db } = getRuntimeDatabaseConnection();
     const result = await createOrganizationService(db).getOrganizationWorkspace(actor, organizationId);
     if (!result.ok) return { kind: "error", ...serverError(result) };
-    return { kind: "success", workspace: result.value };
+    return toOrganizationWorkspaceServerState(result.value);
   } catch {
     return { kind: "error", message: "ไม่สามารถโหลดองค์กรได้ในขณะนี้", status: 503 };
   }

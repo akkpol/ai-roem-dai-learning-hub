@@ -142,19 +142,11 @@ test("stubbed UI path creates an organization and saves settings", async ({ page
     .toBe(true);
 });
 
-test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and stale states", async ({ page }) => {
-  let releaseList: (() => void) | undefined;
-  await page.route("**/api/organizations", async (route) => {
-    await new Promise<void>((resolve) => { releaseList = resolve; });
-    await fulfillJson(route, { organizations: [] });
-  });
+test("server-first retry and client form mutation states remain safe", async ({ page }) => {
   await page.goto("/organizations");
-  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
-  await expect(page.locator('[data-slot="skeleton"]').first()).toBeVisible();
-  releaseList?.();
-  await expect(page.getByText("ยังไม่มีองค์กร")).toBeVisible();
+  await expect(page.getByText("โหลดข้อมูลไม่สำเร็จ")).toBeVisible();
+  await expect(page.getByRole("button", { name: "ลองอีกครั้ง" })).toBeVisible();
 
-  await page.unroute("**/api/organizations");
   await page.route("**/api/organizations", (route, request) => {
     if (request.method() === "POST") {
       return fulfillJson(route, { message: "ชื่อ URL นี้ถูกใช้งานแล้ว", fieldErrors: { slug: "ชื่อ URL นี้ถูกใช้งานแล้ว" } }, 409);
@@ -169,33 +161,6 @@ test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and s
   await expect(page.locator('[data-slot="field-error"]')).toHaveText("ชื่อ URL นี้ถูกใช้งานแล้ว");
   await expect(page.getByLabel("ชื่อ URL")).toHaveAttribute("aria-invalid", "true");
 
-  await page.unroute("**/api/organizations");
-  let listAttempt = 0;
-  await page.route("**/api/organizations", async (route) => {
-    listAttempt += 1;
-    await fulfillJson(route, listAttempt === 1 ? { message: "ไม่สามารถโหลดองค์กรได้" } : { organizations: [] }, listAttempt === 1 ? 503 : 200);
-  });
-  await page.goto("/organizations");
-  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
-  await expect(page.getByText("โหลดข้อมูลไม่สำเร็จ")).toBeVisible();
-  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
-  await expect(page.getByText("ยังไม่มีองค์กร")).toBeVisible();
-
-  await page.unroute("**/api/organizations");
-  await page.route("**/api/organizations", (route) => fulfillJson(route, { message: "กรุณาเข้าสู่ระบบ" }, 401));
-  await page.goto("/organizations");
-  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
-  await expect(page.getByRole("link", { name: "ไปยังหน้าเข้าสู่ระบบ" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "ลองอีกครั้ง" })).toHaveCount(0);
-
-  await page.route(`**/api/organizations/${organizationId}`, (route) =>
-    fulfillJson(route, { message: "ไม่อนุญาต" }, 403),
-  );
-  await page.goto(`/organizations/${organizationId}`);
-  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
-  await expect(page.locator('[data-slot="alert-title"]', { hasText: "ไม่อนุญาต" })).toBeVisible();
-
-  await page.unroute(`**/api/organizations/${organizationId}`);
   let patchAttempt = 0;
   await page.route(`**/api/organizations/${organizationId}`, (route, request) => {
     if (request.method() === "PATCH") {

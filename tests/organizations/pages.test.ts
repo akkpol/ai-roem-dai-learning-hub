@@ -63,8 +63,12 @@ describe("organization workspace pages", () => {
     expect(organizationListView({ kind: "error", message: "offline", status: 500 })).toBe("retry");
     expect(organizationListView({ kind: "error", message: "sign in", status: 401 })).toBe("sign-in");
     expect(organizationWorkspaceView({ kind: "error", message: "forbidden", status: 403 })).toBe("forbidden");
+    expect(organizationWorkspaceView({ kind: "error", message: "sign in", status: 401 })).toBe("sign-in");
+    expect(organizationWorkspaceView({ kind: "error", message: "missing", status: 404 })).toBe("not-found");
     expect(retry).toContain("ลองอีกครั้ง");
     expect(content).toContain("ไม่อนุญาต");
+    expect(content).toContain("องค์กรพร้อมให้สมาชิกเริ่มทำงานร่วมกัน");
+    expect(content).not.toContain("คุณเป็นเจ้าขององค์กรนี้แล้ว");
     expect(content).not.toContain("learninghub.example");
     expect(content).not.toMatch(/รายได้|ผู้เรียนทั้งหมด|conversion/i);
 

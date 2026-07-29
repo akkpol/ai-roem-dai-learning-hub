@@ -127,6 +127,33 @@ describe("organization HTTP boundary", () => {
     expect(await stale.json()).toMatchObject({ code: "stale_version" });
   });
 
+  it("rate limits organization creation after authentication and before writes", async () => {
+    const create = service();
+    const consumeCreateRateLimit = vi.fn(async () => ({ allowed: false, retryAfter: 37 }));
+    const handlers = createOrganizationHttpHandlers({
+      service: create,
+      requireActor: vi.fn(async () => actor),
+      consumeCreateRateLimit,
+      trustedOrigin: "https://learning.example.test",
+    });
+
+    const response = await handlers.createOrganization(jsonRequest(
+      "https://learning.example.test/api/organizations",
+      {
+        displayName: "สถาบันทดสอบ",
+        slug: "test-academy",
+        contactEmail: "owner@example.test",
+        locale: "th-TH",
+        timeZone: "Asia/Bangkok",
+      },
+    ));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("37");
+    expect(consumeCreateRateLimit).toHaveBeenCalledWith(actor);
+    expect(create.createOrganization).not.toHaveBeenCalled();
+  });
+
   it("returns a safe 500 when listing organizations throws", async () => {
     const create = service();
     create.listOrganizationsForActor.mockRejectedValueOnce(new Error("database unavailable"));

@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-import { AuthenticationRequiredError, requireActor, type Actor } from "@/modules/identity";
+import {
+  AuthenticationRequiredError,
+  consumeIdentityRateLimit,
+  readIdentityConfig,
+  requireActor,
+  type Actor,
+  type RateLimitDecision,
+} from "@/modules/identity";
 import { getRuntimeDatabaseConnection } from "@/platform/database/client";
 
 import type {
@@ -60,6 +67,7 @@ const organizationIdInput = z.string().uuid();
 type OrganizationHttpDependencies = {
   service: OrganizationHttpService;
   requireActor(request: Request): Promise<Actor>;
+  consumeCreateRateLimit?(actor: Actor): Promise<RateLimitDecision>;
   trustedOrigin: string;
 };
 
@@ -69,8 +77,9 @@ function errorResponse(
   status: number,
   message: string,
   options: Omit<ErrorBody, "status" | "message"> = {},
+  headers?: HeadersInit,
 ) {
-  return Response.json({ status: false, message, ...options } satisfies ErrorBody, { status });
+  return Response.json({ status: false, message, ...options } satisfies ErrorBody, { status, headers });
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -229,7 +238,17 @@ export function createOrganizationHttpHandlers(dependencies: OrganizationHttpDep
       const actor = await withActor(request);
       if (actor instanceof Response) return actor;
       try {
-        const result = await dependencies.service.createOrganization(actor, createInput.parse(await readJson(request)));
+        const command = createInput.parse(await readJson(request));
+        const limit = await dependencies.consumeCreateRateLimit?.(actor);
+        if (limit && !limit.allowed) {
+          return errorResponse(
+            429,
+            "สร้างองค์กรบ่อยเกินไป กรุณาลองใหม่ภายหลัง",
+            {},
+            { "retry-after": String(limit.retryAfter) },
+          );
+        }
+        const result = await dependencies.service.createOrganization(actor, command);
         if (!result.ok) return resultResponse(result);
         return Response.json(result.value, { status: 201 });
       } catch (error) {
@@ -273,9 +292,18 @@ export function getOrganizationHttpHandlers() {
   const authBaseUrl = process.env.AUTH_BASE_URL;
   if (!authBaseUrl) throw new Error("organization runtime configuration is invalid");
   const { db } = getRuntimeDatabaseConnection();
+  const identityConfig = readIdentityConfig(process.env);
   return createOrganizationHttpHandlers({
     service: createOrganizationService(db),
     requireActor,
+    consumeCreateRateLimit: (actor) =>
+      consumeIdentityRateLimit(
+        db,
+        identityConfig.authSecret,
+        "organization-create",
+        actor.accountId,
+        { windowSeconds: 60, max: 5 },
+      ),
     trustedOrigin: new URL(authBaseUrl).origin,
   });
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2Icon, LoaderCircleIcon } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -167,6 +167,8 @@ export function OrganizationSettingsForm({ organizationId }: { organizationId: s
       : { kind: "error" as const, message: feedback?.message ?? "ไม่สามารถโหลดองค์กรได้", status: feedback?.status, code: feedback?.code, fieldErrors: feedback?.fieldErrors };
   const settingsView = organizationWorkspaceView(settingsState);
   if (settingsView === "loading") return <p className="flex items-center gap-2 text-muted-foreground"><Spinner />กำลังโหลดข้อมูลองค์กร…</p>;
+  if (settingsView === "sign-in") return <Alert><AlertTitle>กรุณาเข้าสู่ระบบ</AlertTitle><AlertDescription className="flex flex-col gap-3"><span>เข้าสู่ระบบเพื่อเปิดการตั้งค่าองค์กร</span><LinkButton href="/sign-in" className="min-h-11">ไปยังหน้าเข้าสู่ระบบ</LinkButton></AlertDescription></Alert>;
+  if (settingsView === "not-found") return <Alert><AlertTitle>ไม่พบองค์กร</AlertTitle><AlertDescription className="flex flex-col gap-3"><span>องค์กรนี้อาจถูกลบหรือ URL ไม่ถูกต้อง</span><LinkButton href="/organizations" className="min-h-11">กลับไปองค์กรของฉัน</LinkButton></AlertDescription></Alert>;
   if (settingsView === "forbidden") return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>คุณไม่มีสิทธิ์เปิดการตั้งค่าองค์กรนี้</AlertDescription></Alert>;
   if (settingsView === "retry") return <div className="flex flex-col gap-3"><FeedbackAlert feedback={feedback} /><Button variant="outline" className="min-h-11" onPress={() => void load()}>ลองอีกครั้ง</Button></div>;
   if (!workspace) return null;

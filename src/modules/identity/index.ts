@@ -13,10 +13,12 @@ export {
   getGoogleLoginHandlers,
   getIdentityHttpHandlers,
 } from "./runtime";
-export { readGoogleOAuthDisclosure } from "./config";
+export { readGoogleOAuthDisclosure, readIdentityConfig } from "./config";
 export type { GoogleOAuthDisclosure } from "./config";
 export { currentIdentityPolicies } from "./policies";
 export { runIdentityRetention } from "./privacy";
+export { consumeIdentityRateLimit } from "./rate-limit";
+export type { RateLimitDecision } from "./rate-limit";
 export {
   authenticateRequest,
   authorize,

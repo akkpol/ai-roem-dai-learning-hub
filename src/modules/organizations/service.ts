@@ -265,7 +265,7 @@ export function createOrganizationService(
           organizationId: record.id,
           actorAccountId: actor.accountId,
           action: "organization.identity_updated.v1",
-          payload: { fields: "display_name,description,locale,time_zone" },
+          payload: { fields: "display_name,description,contact_email,locale,time_zone" },
           occurredAt: now(),
         });
         return { kind: "updated" as const, record, membership };

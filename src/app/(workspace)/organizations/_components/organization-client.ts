@@ -146,6 +146,8 @@ export function organizationListView(state: { kind: "loading" } | OrganizationLi
 
 export function organizationWorkspaceView<TWorkspace>(state: { kind: "loading" } | OrganizationWorkspaceState<TWorkspace>) {
   if (state.kind === "loading") return "loading";
+  if (state.kind === "error" && state.status === 401) return "sign-in";
+  if (state.kind === "error" && state.status === 404) return "not-found";
   return state.kind === "error" ? (state.status === 403 ? "forbidden" : "retry") : "content";
 }
 

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { Actor } from "@/modules/identity";
 import { describe, expect, it, vi } from "vitest";
 
@@ -49,6 +50,12 @@ function database() {
 }
 
 describe("organization service", () => {
+  it("records every mutable identity field name without contact data", () => {
+    const source = readFileSync("src/modules/organizations/service.ts", "utf8");
+    expect(source).toContain("display_name,description,contact_email,locale,time_zone");
+    expect(source).not.toContain('payload: { fields: "contact@example.test"');
+  });
+
   it("creates organization, owner membership, redacted audit and event in one transaction", async () => {
     const store = repository();
     const emitted: unknown[] = [];

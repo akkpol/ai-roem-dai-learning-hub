@@ -45,5 +45,6 @@ describe("provider organization browser gate", () => {
     expect(fixture).not.toMatch(/console\.(?:log|info).*token/i);
     const config = readFileSync("playwright.config.ts", "utf8");
     expect(config).toContain('providerBrowserGate ? "off"');
+    expect(config).toContain("retries: providerBrowserGate ? 0");
   });
 });

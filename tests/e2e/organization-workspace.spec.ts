@@ -218,5 +218,5 @@ test("real-stack organization journey is opt-in and requires a disposable authen
   await page.getByRole("link", { name: "ตั้งค่าองค์กร" }).click();
   await page.getByLabel("ชื่อองค์กร").fill("องค์กรทดสอบ E2E ที่แก้ไขแล้ว");
   await page.getByRole("button", { name: "บันทึกการเปลี่ยนแปลง" }).click();
-  await expect(page.getByRole("alert")).toContainText("บันทึกข้อมูลองค์กรแล้ว");
+  await expect(page.locator('[data-slot="alert"]')).toContainText("บันทึกข้อมูลองค์กรแล้ว");
 });

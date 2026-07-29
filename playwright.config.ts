@@ -12,7 +12,7 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   forbidOnly: true,
-  retries: process.env.CI ? 1 : 0,
+  retries: providerBrowserGate ? 0 : process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL,

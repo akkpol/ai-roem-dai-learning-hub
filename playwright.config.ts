@@ -6,18 +6,19 @@ const adminStorageState =
   process.env.IDENTITY_E2E_ADMIN_STORAGE_STATE || undefined;
 const supportStorageState =
   process.env.IDENTITY_E2E_SUPPORT_STORAGE_STATE || undefined;
+const providerBrowserGate = process.env.ORGANIZATION_E2E_PROVIDER_GATE === "1";
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   forbidOnly: true,
-  retries: process.env.CI ? 1 : 0,
+  retries: providerBrowserGate ? 0 : process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
   use: {
     baseURL,
-    trace: "retain-on-failure",
+    trace: providerBrowserGate ? "off" : "retain-on-failure",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: providerBrowserGate ? "off" : "retain-on-failure",
   },
   projects: [
     {

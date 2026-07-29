@@ -7,6 +7,16 @@ import { identityRateLimits } from "./schema";
 
 export type RateLimitDecision = { allowed: boolean; retryAfter: number };
 
+export function deriveIdentityRateLimitKey(
+  secret: string,
+  endpoint: string,
+  clientId: string,
+): string {
+  return createHmac("sha256", secret)
+    .update(`${endpoint}:${clientId}`)
+    .digest("hex");
+}
+
 export async function consumeIdentityRateLimit(
   database: AppDatabase,
   secret: string,
@@ -15,9 +25,7 @@ export async function consumeIdentityRateLimit(
   rule: { windowSeconds: number; max: number },
   now = Date.now(),
 ): Promise<RateLimitDecision> {
-  const key = createHmac("sha256", secret)
-    .update(`${endpoint}:${clientIp}`)
-    .digest("hex");
+  const key = deriveIdentityRateLimitKey(secret, endpoint, clientIp);
   const cutoff = now - rule.windowSeconds * 1_000;
   const rows = await database
     .insert(identityRateLimits)

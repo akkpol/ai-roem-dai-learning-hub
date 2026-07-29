@@ -18,11 +18,13 @@ independent review verdict and it does not make WP-02 verified.
 - Server-first organization list and workspace routes, plus create and settings
   interactions, using
   the existing React Aria/shadcn `aria-nova` foundation.
-- Identity updates lock the organization and active actor membership in the
-  transaction, authorize against that locked state, and keep the active-status
-  predicate with the optimistic-version mutation. Unauthenticated failures map
-  only from the public typed identity error; unexpected runtime/configuration
-  failures remain a safe retryable response.
+- Identity updates lock the organization aggregate inside the transaction, then
+  read and authorize the active membership under that lock. Future membership
+  writers must acquire the same organization aggregate lock before changing
+  role or status. The active-status predicate remains with the
+  optimistic-version mutation. Unauthenticated failures map only from the
+  public typed identity error; unexpected runtime/configuration failures remain
+  a safe retryable response.
 - A single role-aware workspace projection is used by HTTP GET and Server
   Component reads: `member` responses omit `contactEmail` structurally, while
   `owner` and `manager` retain it for settings. Primary workspace/list content

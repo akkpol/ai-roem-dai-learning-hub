@@ -49,6 +49,10 @@ describe("organization persistence schema", () => {
 
   it("uses narrow runtime grants and blocks contact email in audit payloads", () => {
     const migration = readFileSync("drizzle/0006_organization_workspace.sql", "utf8");
+    const auditFieldMigration = readFileSync(
+      "drizzle/0007_organization_audit_contact_email_field.sql",
+      "utf8",
+    );
     expect(migration).toContain("organization_audit_payload_is_safe");
     expect(migration).toContain("GRANT SELECT, INSERT (");
     expect(migration).toContain("GRANT UPDATE (");
@@ -56,6 +60,10 @@ describe("organization persistence schema", () => {
     expect(migration).not.toMatch(
       /GRANT[^;]*(DELETE|UPDATE)[^;]*organization_audit_events/i,
     );
+    expect(auditFieldMigration).toContain(
+      '{"fields":"display_name,description,contact_email,locale,time_zone"}',
+    );
+    expect(auditFieldMigration).not.toContain("contact@example.test");
   });
 
   it("grants membership reads only to the workspace fields", () => {

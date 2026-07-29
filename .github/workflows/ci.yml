@@ -181,6 +181,7 @@ jobs:
           NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
           ORGANIZATION_E2E_FIXTURE_ACK: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
           E2E_FIXTURE_MANIFEST_PATH: ${{ runner.temp }}/organization-e2e/manifest.json
+          AUTH_SECRET: ci-organization-e2e-secret-000000000
         run: npx tsx scripts/e2e/organization-provider-fixture.ts cleanup
       - name: Upload provider organization browser evidence
         if: always() && steps.scope.outputs.provider == 'true'

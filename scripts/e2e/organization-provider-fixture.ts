@@ -9,6 +9,7 @@ import { Client } from "pg";
 import { preflightSession002DatabaseTarget } from "../database/provider-preflight";
 import { readIdentityConfig } from "../../src/modules/identity/config";
 import { decryptAuthEmailIntent } from "../../src/modules/identity/email/crypto";
+import { deriveIdentityRateLimitKey } from "../../src/modules/identity/rate-limit";
 import { identityAccounts } from "../../src/modules/identity/schema";
 import { createIdentityService } from "../../src/modules/identity/service";
 import { createDatabaseConnection } from "../../src/platform/database/client";
@@ -116,17 +117,21 @@ async function cleanup() {
       }
     }
     const organizationIds = manifest.organizations.map((entry) => entry.id).filter((id): id is string => Boolean(id));
+    const rateLimitKey = manifest.accountId
+      ? deriveIdentityRateLimitKey(required("AUTH_SECRET"), "organization-create", manifest.accountId)
+      : null;
     await migration.query("delete from organization_audit_events where organization_id = any($1::uuid[])", [organizationIds]);
     await migration.query("delete from organization_memberships where organization_id = any($1::uuid[])", [organizationIds]);
     await migration.query("delete from platform_event_outbox where aggregate_type = 'organization' and aggregate_id = any($1::uuid[])", [organizationIds]);
     await migration.query("delete from organizations where id = any($1::uuid[])", [organizationIds]);
     if (manifest.accountId) {
+      await migration.query("delete from identity_rate_limits where key = $1", [rateLimitKey]);
       await migration.query("delete from identity_audit_events where account_id = $1 or actor_account_id = $1", [manifest.accountId]); await migration.query("delete from identity_account_deletion_requests where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_email_outbox where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_policy_acceptances where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_profiles where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_sessions where user_id = $1", [manifest.accountId]); await migration.query("delete from identity_auth_factors where user_id = $1", [manifest.accountId]); await migration.query("delete from identity_accounts where id = $1", [manifest.accountId]);
     }
     await migration.query("commit");
     const verification = await migration.query<{ remaining: string }>(
-      "select (select count(*) from identity_accounts where id = $1 or email = $2) + (select count(*) from organizations where id = any($3::uuid[])) as remaining",
-      [manifest.accountId, manifest.email, organizationIds],
+      "select (select count(*) from identity_accounts where id = $1 or email = $2) + (select count(*) from organizations where id = any($3::uuid[])) + (select count(*) from identity_rate_limits where key = $4) as remaining",
+      [manifest.accountId, manifest.email, organizationIds, rateLimitKey],
     );
     if (verification.rows[0]?.remaining !== "0") throw new Error("e2e fixture cleanup verification failed");
     rmSync(manifestPath); // only after committed and verified deletion

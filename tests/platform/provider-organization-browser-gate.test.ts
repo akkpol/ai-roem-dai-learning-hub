@@ -34,6 +34,10 @@ describe("provider organization browser gate", () => {
     expect(fixture).toContain("atomicWrite(manifestPath, manifest); // pending cleanup authority exists before signUp");
     expect(fixture).toContain("REMOTE_TEST_NEON_IDENTITY_ACK");
     expect(fixture).toContain("identityAcknowledgement(providerIdentity) !== identityAcknowledgement(manifest.providerIdentity)");
+    expect(fixture).toContain('deriveIdentityRateLimitKey(required("AUTH_SECRET"), "organization-create", manifest.accountId)');
+    expect(fixture).toContain("delete from identity_rate_limits where key = $1");
+    expect(fixture).toContain("select count(*) from identity_rate_limits where key = $4");
+    expect(workflow).toContain("AUTH_SECRET: ci-organization-e2e-secret-000000000");
     expect(fixture).not.toContain("select organization_id from organization_memberships where account_id");
     expect(fixture).toContain("select id from identity_accounts where email = $1");
     expect(fixture).toContain("fixtureEmail.test(value.email)");

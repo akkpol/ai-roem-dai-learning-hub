@@ -6,7 +6,6 @@ import type { AppDatabase } from "@/platform/database/client";
 import type {
   OrganizationLocale,
   OrganizationMembership,
-  OrganizationMembershipRole,
   OrganizationStatus,
 } from "./contracts";
 import {

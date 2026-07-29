@@ -6,7 +6,7 @@ export default function OrganizationsLayout({ children }: { children: React.Reac
   return (
     <div className="min-h-screen bg-background text-foreground">
       <nav aria-label="พื้นที่องค์กร" className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-        <LinkButton href="/organizations" variant="ghost">
+        <LinkButton href="/organizations" variant="ghost" className="min-h-11">
           <Building2Icon data-icon="inline-start" />
           องค์กรของฉัน
         </LinkButton>

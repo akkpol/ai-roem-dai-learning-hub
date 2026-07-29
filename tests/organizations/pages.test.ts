@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   loadOrganizationList,
   loadOrganizationWorkspace,
+  createOrganization,
   organizationListView,
   organizationWorkspaceView,
   updateOrganizationIdentity,
@@ -18,6 +19,7 @@ describe("organization workspace pages", () => {
     const workspacePage = read("src/app/(workspace)/organizations/[organizationId]/page.tsx");
     const settingsPage = read("src/app/(workspace)/organizations/[organizationId]/settings/page.tsx");
     const forms = read("src/app/(workspace)/organizations/_components/organization-forms.tsx");
+    const layout = read("src/app/(workspace)/organizations/layout.tsx");
 
     expect(listPage).toContain("OrganizationList");
     expect(newPage).toContain("OrganizationCreateForm");
@@ -28,7 +30,10 @@ describe("organization workspace pages", () => {
     expect(forms).toContain('from "@/components/ui/spinner"');
     expect(forms).toContain("data-invalid=");
     expect(forms).toContain("aria-invalid=");
+    expect(forms).toContain('className: "min-h-11"');
+    expect(forms).toContain("[&>select]:min-h-11");
     expect(forms).toContain("window.location.assign");
+    expect(layout).toContain('className="min-h-11"');
     expect(forms).not.toMatch(/<button\b|<input\b|<textarea\b|<select\b|<label\b/);
   });
 
@@ -44,6 +49,7 @@ describe("organization workspace pages", () => {
     expect(organizationListView({ kind: "loading" })).toBe("loading");
     expect(organizationListView({ kind: "success", organizations: [] })).toBe("empty");
     expect(organizationListView({ kind: "error", message: "offline", status: 500 })).toBe("retry");
+    expect(organizationListView({ kind: "error", message: "sign in", status: 401 })).toBe("sign-in");
     expect(organizationWorkspaceView({ kind: "error", message: "forbidden", status: 403 })).toBe("forbidden");
     expect(workspace).toContain("ลองอีกครั้ง");
     expect(workspace).toContain("ไม่อนุญาต");
@@ -55,6 +61,25 @@ describe("organization workspace pages", () => {
       return new Response(JSON.stringify({ organizations: [] }), { status: 200 });
     });
     await expect(loadOrganizationList(fetchMock)).resolves.toEqual({ kind: "success", organizations: [] });
+
+    const invalidCreateFetch = vi.fn();
+    await expect(createOrganization(invalidCreateFetch, {
+      displayName: "",
+      slug: "not valid",
+      description: "",
+      contactEmail: "not-an-email",
+      locale: "th-TH",
+      timeZone: "",
+    })).resolves.toMatchObject({
+      ok: false,
+      fieldErrors: {
+        displayName: expect.any(String),
+        slug: expect.any(String),
+        contactEmail: expect.any(String),
+        timeZone: expect.any(String),
+      },
+    });
+    expect(invalidCreateFetch).not.toHaveBeenCalled();
 
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: "ไม่มีสิทธิ์" }), { status: 403 }));
     await expect(loadOrganizationWorkspace(fetchMock, "00000000-0000-4000-8000-000000000003")).resolves.toMatchObject({ kind: "error", status: 403 });

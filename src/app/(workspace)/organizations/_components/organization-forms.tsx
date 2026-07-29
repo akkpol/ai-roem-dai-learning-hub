@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { OrganizationWorkspaceDto } from "@/modules/organizations";
 
 import {
+  createOrganization,
   loadOrganizationWorkspace,
   type OrganizationIdentityValues,
   organizationMutationView,
@@ -33,25 +34,6 @@ const initialValues: OrganizationIdentityValues = {
   timeZone: "Asia/Bangkok",
 };
 
-function errorFromResponse(status: number, body: unknown, fallback: string): Feedback {
-  const value = body as { message?: string; code?: string; fieldErrors?: FieldErrors };
-  return {
-    tone: "error",
-    message: value?.message ?? fallback,
-    status,
-    code: value?.code,
-    fieldErrors: value?.fieldErrors,
-  };
-}
-
-async function responseJson(response: Response): Promise<unknown> {
-  try {
-    return await response.json();
-  } catch {
-    return undefined;
-  }
-}
-
 function IdentityFields({
   values,
   setValues,
@@ -70,6 +52,7 @@ function IdentityFields({
     name: key,
     value: values[key],
     disabled,
+    className: "min-h-11",
     onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setValues((current) => ({ ...current, [key]: event.target.value })),
   });
   const invalid = (key: keyof typeof initialValues) => Boolean(errors?.[key]);
@@ -99,7 +82,7 @@ function IdentityFields({
     </Field>
     <Field data-invalid={invalid("locale") || undefined} data-disabled={disabled || undefined}>
       <FieldLabel htmlFor="locale">ภาษาเริ่มต้น</FieldLabel>
-      <NativeSelect {...bind("locale")} aria-invalid={invalid("locale") || undefined}>
+      <NativeSelect {...bind("locale")} className="min-h-11 [&>select]:min-h-11" aria-invalid={invalid("locale") || undefined}>
         <NativeSelectOption value="th-TH">ไทย</NativeSelectOption>
         <NativeSelectOption value="en-US">English</NativeSelectOption>
       </NativeSelect>
@@ -138,10 +121,9 @@ export function OrganizationCreateForm() {
     event.preventDefault();
     setBusy(true); setFeedback(null);
     try {
-      const response = await fetch("/api/organizations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...values, description: values.description || undefined }) });
-      const body = await responseJson(response);
-      if (!response.ok) { setFeedback(errorFromResponse(response.status, body, "ไม่สามารถสร้างองค์กรได้")); return; }
-      const workspace = body as OrganizationWorkspaceDto;
+      const result = await createOrganization(fetch, values);
+      if (!result.ok) { setFeedback({ tone: "error", ...result }); return; }
+      const workspace = result.workspace;
       setFeedback({ tone: "success", message: "สร้างองค์กรแล้ว กำลังเปิดพื้นที่ทำงาน" });
       window.location.assign(`/organizations/${workspace.organization.id}`);
     } catch {

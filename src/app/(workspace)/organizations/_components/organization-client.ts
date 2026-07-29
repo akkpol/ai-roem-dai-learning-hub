@@ -22,6 +22,10 @@ export type OrganizationWorkspaceRequest =
   | { kind: "success"; workspace: OrganizationWorkspaceDto }
   | { kind: "error"; message: string; status?: number; code?: string; fieldErrors?: Record<string, string> };
 
+export type OrganizationCreateRequest =
+  | { ok: true; workspace: OrganizationWorkspaceDto }
+  | { ok: false; message: string; status?: number; code?: string; fieldErrors?: Record<string, string> };
+
 async function body(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -39,6 +43,37 @@ function failure(response: Response, value: unknown, fallback: string) {
     code: error?.code,
     fieldErrors: error?.fieldErrors,
   };
+}
+
+export function validateOrganizationCreate(values: OrganizationIdentityValues): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  if (values.displayName.trim().length < 2) fieldErrors.displayName = "กรอกชื่อองค์กรอย่างน้อย 2 ตัวอักษร";
+  const slug = values.slug.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(slug)) fieldErrors.slug = "ใช้ตัวอักษรอังกฤษ ตัวเลข และขีดกลาง 3–63 ตัวอักษร";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contactEmail.trim())) fieldErrors.contactEmail = "กรอกอีเมลติดต่อให้ถูกต้อง";
+  if (!values.timeZone.trim()) fieldErrors.timeZone = "กรอกเขตเวลา เช่น Asia/Bangkok";
+  return fieldErrors;
+}
+
+export async function createOrganization(
+  fetcher: Fetcher,
+  values: OrganizationIdentityValues,
+): Promise<OrganizationCreateRequest> {
+  const fieldErrors = validateOrganizationCreate(values);
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, message: "กรุณาตรวจสอบข้อมูลที่กรอก", fieldErrors };
+  }
+  const response = await fetcher("/api/organizations", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...values, description: values.description || undefined }),
+  });
+  const value = await body(response);
+  if (!response.ok) {
+    const error = failure(response, value, "ไม่สามารถสร้างองค์กรได้");
+    return { ok: false, message: error.message, status: error.status, code: error.code, fieldErrors: error.fieldErrors };
+  }
+  return { ok: true, workspace: value as OrganizationWorkspaceDto };
 }
 
 export async function loadOrganizationList(fetcher: Fetcher = fetch): Promise<OrganizationListRequest> {
@@ -102,6 +137,7 @@ export async function updateOrganizationIdentity(
 
 export function organizationListView(state: { kind: "loading" } | OrganizationListRequest) {
   if (state.kind === "loading") return "loading";
+  if (state.kind === "error" && state.status === 401) return "sign-in";
   if (state.kind === "error") return state.status === 403 ? "forbidden" : "retry";
   return state.organizations.length === 0 ? "empty" : "content";
 }

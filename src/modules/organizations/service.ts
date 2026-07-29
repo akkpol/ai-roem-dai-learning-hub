@@ -1,6 +1,5 @@
 import type { Actor } from "@/modules/identity";
 import type { AppDatabase } from "@/platform/database/client";
-import type { DatabaseTransaction } from "@/platform/database/transaction";
 import { withTransaction } from "@/platform/database/transaction";
 import { enqueueDomainEvent } from "@/platform/events";
 

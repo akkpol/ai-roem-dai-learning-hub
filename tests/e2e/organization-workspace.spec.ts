@@ -8,11 +8,13 @@ const allowRealMutations = process.env.ORGANIZATION_E2E_ALLOW_MUTATIONS === "1";
 const organizationId = "00000000-0000-4000-8000-000000000071";
 const consoleErrors = new Map<string, string[]>();
 
-function recordFixtureOrganization(organizationId: string) {
+function recordFixtureOrganization(organizationId: string, organizationSlug: string) {
   const path = process.env.E2E_FIXTURE_MANIFEST_PATH;
   if (!path) return;
-  const manifest = JSON.parse(readFileSync(path, "utf8")) as { organizationIds?: string[] };
-  manifest.organizationIds = [...new Set([...(manifest.organizationIds ?? []), organizationId])];
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as { organizations?: Array<{ slug: string; id: string | null }> };
+  const organization = manifest.organizations?.find((entry) => entry.slug === organizationSlug && entry.id === null);
+  if (!organization) throw new Error("fixture organization is not pre-authorized");
+  organization.id = organizationId;
   writeFileSync(path, `${JSON.stringify(manifest)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
@@ -192,7 +194,10 @@ test("real-stack organization journey is opt-in and requires a disposable authen
     "Requires authenticated disposable owner storage state and ORGANIZATION_E2E_ALLOW_MUTATIONS=1.",
   );
   await page.setViewportSize(testInfo.project.name.includes("mobile") ? { width: 390, height: 844 } : { width: 1440, height: 900 });
-  const slug = `e2e-org-${testInfo.project.name}-${Date.now()}`;
+  const slug = testInfo.project.name.includes("mobile")
+    ? process.env.ORGANIZATION_E2E_MOBILE_SLUG
+    : process.env.ORGANIZATION_E2E_DESKTOP_SLUG;
+  if (!slug) throw new Error("real-stack organization slug fixture is missing");
   await page.goto("/organizations/new");
   await page.getByLabel("ชื่อองค์กร").fill("องค์กรทดสอบ E2E");
   await page.getByLabel("ชื่อ URL").fill(slug);
@@ -201,7 +206,7 @@ test("real-stack organization journey is opt-in and requires a disposable authen
   await expect(page).toHaveURL(/\/organizations\/[0-9a-f-]{36}$/);
   const organizationId = new URL(page.url()).pathname.split("/").at(-1);
   if (!organizationId) throw new Error("real-stack organization id is missing");
-  recordFixtureOrganization(organizationId);
+  recordFixtureOrganization(organizationId, slug);
   await expect(page.getByRole("heading", { name: "องค์กรทดสอบ E2E" })).toBeVisible();
   const artifactDirectory = process.env.ORGANIZATION_E2E_SUCCESS_ARTIFACT_DIR;
   if (artifactDirectory) {

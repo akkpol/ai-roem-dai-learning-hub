@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
@@ -104,7 +104,7 @@ jobs:
           npm run test:identity-acceptance
       - name: Provider authenticated organization browser gate
         if: steps.scope.outputs.provider == 'true'
-        timeout-minutes: 15
+        timeout-minutes: 8
         shell: bash
         env:
           DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
@@ -120,30 +120,35 @@ jobs:
           NEON_ENDPOINT_HOSTNAME: ${{ vars.NEON_SESSION_002_MIGRATION_ENDPOINT_HOSTNAME }}
           NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
           ORGANIZATION_E2E_FIXTURE_ACK: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
-          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3002
+          NEXT_PUBLIC_APP_URL: http://localhost:3002
           AUTH_SECRET: ci-organization-e2e-secret-000000000
-          AUTH_BASE_URL: http://127.0.0.1:3002/api/auth
+          AUTH_BASE_URL: http://localhost:3002/api/auth
           AUTH_EMAIL_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
           AUTH_EMAIL_KEY_VERSION: ci-v1
           AUTH_TERMS_VERSION: ci-terms
           AUTH_PRIVACY_VERSION: ci-privacy
           AUTH_EMAIL_FROM: organization-e2e@example.test
           RESEND_API_KEY: re_ci_organization_e2e
-          IDENTITY_E2E_BASE_URL: http://127.0.0.1:3002
-          ORGANIZATION_E2E_BASE_URL: http://127.0.0.1:3002
+          IDENTITY_E2E_BASE_URL: http://localhost:3002
+          ORGANIZATION_E2E_BASE_URL: http://localhost:3002
           ORGANIZATION_E2E_ALLOW_MUTATIONS: '1'
+          ORGANIZATION_E2E_PROVIDER_GATE: '1'
         run: |
           fixture_dir="$RUNNER_TEMP/organization-e2e"
           mkdir -p "$fixture_dir"
           export E2E_FIXTURE_MANIFEST_PATH="$fixture_dir/manifest.json"
           export IDENTITY_E2E_ADMIN_STORAGE_STATE="$fixture_dir/owner-storage.json"
           export ORGANIZATION_E2E_SUCCESS_ARTIFACT_DIR="$fixture_dir/artifacts"
+          export ORGANIZATION_E2E_DESKTOP_SLUG="e2e-desktop-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          export ORGANIZATION_E2E_MOBILE_SLUG="e2e-mobile-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           server_pid=""
-          cleanup() {
-            if [ -n "$server_pid" ]; then kill "$server_pid" 2>/dev/null || true; wait "$server_pid" || true; fi
-            npx tsx scripts/e2e/organization-provider-fixture.ts cleanup || true
+          stop_server() {
+            status=$?
+            if [ -n "$server_pid" ] && kill -0 "$server_pid" 2>/dev/null; then kill "$server_pid"; fi
+            if [ -n "$server_pid" ]; then wait "$server_pid" || true; fi
+            exit "$status"
           }
-          trap cleanup EXIT
+          trap stop_server EXIT
           npx tsx scripts/database/provider-preflight.ts
           npm run start -- --hostname 127.0.0.1 --port 3002 > "$fixture_dir/server.log" 2>&1 &
           server_pid=$!
@@ -154,17 +159,47 @@ jobs:
           curl --fail --silent http://127.0.0.1:3002/api/health/live > /dev/null
           npx tsx scripts/e2e/organization-provider-fixture.ts prepare
           if ! find "$HOME/.cache/ms-playwright" -maxdepth 1 -type d -name 'chromium-*' | grep -q .; then npx playwright install chromium --with-deps; fi
-          npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --grep "real-stack organization journey"
+          npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --grep "real-stack organization journey" --workers=1
+          printf '{"status":"passed","gate":"provider-organization-browser"}\n' > "$fixture_dir/artifacts/summary.json"
+      - name: Cleanup provider organization browser fixture
+        id: cleanup_provider_organization_fixture
+        if: always() && steps.scope.outputs.provider == 'true'
+        timeout-minutes: 5
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.NEON_SESSION_002_TEST_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.NEON_SESSION_002_MIGRATION_DATABASE_URL }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          REMOTE_TEST_DATABASE_RESET_ACK: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+          REMOTE_TEST_NEON_IDENTITY_ACK: ${{ vars.NEON_SESSION_002_RESET_IDENTITY_ACK }}
+          NEON_PROJECT_ID: ${{ vars.NEON_SESSION_002_PROJECT_ID }}
+          NEON_BRANCH_ID: ${{ vars.NEON_SESSION_002_BRANCH_ID }}
+          NEON_BRANCH_NAME: ${{ vars.NEON_SESSION_002_BRANCH_NAME }}
+          NEON_BRANCH_IS_DEFAULT: ${{ vars.NEON_SESSION_002_BRANCH_IS_DEFAULT }}
+          NEON_ENDPOINT_ID: ${{ vars.NEON_SESSION_002_ENDPOINT_ID }}
+          NEON_ENDPOINT_HOSTNAME: ${{ vars.NEON_SESSION_002_MIGRATION_ENDPOINT_HOSTNAME }}
+          NEON_DATABASE_NAME: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+          ORGANIZATION_E2E_FIXTURE_ACK: ${{ vars.NEON_SESSION_002_TEST_DATABASE_NAME }}
+          E2E_FIXTURE_MANIFEST_PATH: ${{ runner.temp }}/organization-e2e/manifest.json
+        run: npx tsx scripts/e2e/organization-provider-fixture.ts cleanup
       - name: Upload provider organization browser evidence
         if: always() && steps.scope.outputs.provider == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: provider-organization-browser-evidence
           path: |
-            ${{ runner.temp }}/organization-e2e/artifacts
-            ${{ runner.temp }}/organization-e2e/server.log
-            test-results/playwright
+            ${{ runner.temp }}/organization-e2e/artifacts/*.png
+            ${{ runner.temp }}/organization-e2e/artifacts/summary.json
           if-no-files-found: warn
+          retention-days: 7
+      - name: Upload provider organization cleanup manifest
+        if: always() && steps.cleanup_provider_organization_fixture.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-organization-cleanup-authority
+          path: ${{ runner.temp }}/organization-e2e/manifest.json
+          if-no-files-found: warn
+          retention-days: 1
       - name: Application HTTP smoke test
         if: steps.scope.outputs.code == 'true'
         shell: bash

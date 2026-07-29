@@ -228,31 +228,36 @@ export function createOrganizationService(
       if (!Number.isInteger(command.expectedVersion) || command.expectedVersion < 1) {
         return invalid("expectedVersion");
       }
-      const [organization, membership] = await Promise.all([
-        repository.findOrganizationById(command.organizationId),
-        repository.findActiveMembership(command.organizationId, actor.accountId),
-      ]);
-      if (!organization) return { ok: false, error: { code: "organization_not_found" } };
-      const decision = evaluateOrganizationAuthorization({
-        actor: serviceActor(actor),
-        permission: "organization.identity.update",
-        organizationId: command.organizationId,
-        membership: membership ?? undefined,
-      });
-      if (!decision.allowed || organization.status !== "active" || !membership) {
-        return { ok: false, error: { code: "forbidden" } };
-      }
       const identity = normalizeIdentity(command);
       const identityError = validateIdentity(identity);
       if (identityError) return identityError;
 
-      const updated = await withTransaction(database, async (transaction) => {
+      const updateResult = await withTransaction(database, async (transaction) => {
+        const organization = await repository.lockOrganizationForUpdate(
+          transaction,
+          command.organizationId,
+        );
+        if (!organization) return { kind: "not_found" as const };
+        const membership = await repository.lockActiveMembershipForUpdate(
+          transaction,
+          command.organizationId,
+          actor.accountId,
+        );
+        const decision = evaluateOrganizationAuthorization({
+          actor: serviceActor(actor),
+          permission: "organization.identity.update",
+          organizationId: command.organizationId,
+          membership: membership ?? undefined,
+        });
+        if (!decision.allowed || organization.status !== "active" || !membership) {
+          return { kind: "forbidden" as const };
+        }
         const record = await repository.updateOrganizationIdentity(transaction, {
           id: command.organizationId,
           ...identity,
           version: command.expectedVersion,
         });
-        if (!record) return null;
+        if (!record) return { kind: "stale" as const };
         await repository.appendAudit(transaction, {
           organizationId: record.id,
           actorAccountId: actor.accountId,
@@ -260,10 +265,12 @@ export function createOrganizationService(
           payload: { fields: "display_name,description,locale,time_zone" },
           occurredAt: now(),
         });
-        return record;
+        return { kind: "updated" as const, record, membership };
       });
-      if (!updated) return { ok: false, error: { code: "stale_version" } };
-      return { ok: true, value: toWorkspace(updated, membership) };
+      if (updateResult.kind === "not_found") return { ok: false, error: { code: "organization_not_found" } };
+      if (updateResult.kind === "forbidden") return { ok: false, error: { code: "forbidden" } };
+      if (updateResult.kind === "stale") return { ok: false, error: { code: "stale_version" } };
+      return { ok: true, value: toWorkspace(updateResult.record, updateResult.membership) };
     },
   };
 }

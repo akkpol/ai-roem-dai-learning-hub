@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { AuthenticationRequiredError } from "@/modules/identity";
 import { createOrganizationHttpHandlers } from "@/modules/organizations/http";
 import type { Actor } from "@/modules/identity";
 
@@ -65,7 +66,7 @@ describe("organization HTTP boundary", () => {
   it("maps unauthenticated, invalid and duplicate-slug create attempts safely", async () => {
     const unauthenticated = createOrganizationHttpHandlers({
       service: service(),
-      requireActor: vi.fn(async () => { throw new Error("no session"); }),
+      requireActor: vi.fn(async () => { throw new AuthenticationRequiredError(); }),
       trustedOrigin: "https://learning.example.test",
     });
     expect((await unauthenticated.listOrganizations(new Request("https://learning.example.test/api/organizations"))).status).toBe(401);
@@ -82,6 +83,24 @@ describe("organization HTTP boundary", () => {
     }));
     expect(duplicate.status).toBe(409);
     expect(await duplicate.json()).toMatchObject({ fieldErrors: { slug: expect.any(String) } });
+  });
+
+  it("maps only explicit authentication-required failures to 401 and preserves unexpected dependency failures as retryable 500", async () => {
+    const unauthenticated = createOrganizationHttpHandlers({
+      service: service(),
+      requireActor: vi.fn(async () => { throw new AuthenticationRequiredError(); }),
+      trustedOrigin: "https://learning.example.test",
+    });
+    expect((await unauthenticated.listOrganizations(new Request("https://learning.example.test/api/organizations"))).status).toBe(401);
+
+    const unavailable = createOrganizationHttpHandlers({
+      service: service(),
+      requireActor: vi.fn(async () => { throw new Error("database unavailable"); }),
+      trustedOrigin: "https://learning.example.test",
+    });
+    const response = await unavailable.listOrganizations(new Request("https://learning.example.test/api/organizations"));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: false, message: "ไม่สามารถโหลดองค์กรได้ในขณะนี้" });
   });
 
   it("returns a safe create response and maps forbidden read plus stale update", async () => {

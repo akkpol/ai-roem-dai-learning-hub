@@ -22,8 +22,10 @@ describe("organization workspace pages", () => {
     const layout = read("src/app/(workspace)/organizations/layout.tsx");
 
     expect(listPage).toContain("OrganizationList");
+    expect(listPage).toContain("loadOrganizationListForServer");
     expect(newPage).toContain("OrganizationCreateForm");
     expect(workspacePage).toContain("OrganizationWorkspace");
+    expect(workspacePage).toContain("loadOrganizationWorkspaceForServer");
     expect(settingsPage).toContain("OrganizationSettingsForm");
     expect(forms).toContain('from "@/components/ui/field"');
     expect(forms).toContain('from "@/components/ui/textarea"');
@@ -53,6 +55,7 @@ describe("organization workspace pages", () => {
     expect(organizationWorkspaceView({ kind: "error", message: "forbidden", status: 403 })).toBe("forbidden");
     expect(workspace).toContain("ลองอีกครั้ง");
     expect(workspace).toContain("ไม่อนุญาต");
+    expect(workspace).not.toContain("useEffect");
     expect(workspace).not.toContain("learninghub.example");
     expect(workspace).not.toMatch(/รายได้|ผู้เรียนทั้งหมด|conversion/i);
 

@@ -29,6 +29,13 @@ export type Actor = {
   globalRoles: GlobalRole[];
 };
 
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("authentication required");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
 export const permissionValues = [
   "identity.profile.read",
   "identity.profile.update",
@@ -261,7 +268,7 @@ export function createIdentityAuthorizationService(
         });
       });
       if (!actor || actor.accountStatus !== "active") {
-        throw new Error("authentication required");
+        throw new AuthenticationRequiredError();
       }
       return actor;
     },

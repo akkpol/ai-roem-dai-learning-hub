@@ -1,6 +1,4 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 
 const enabled = Boolean(process.env.ORGANIZATION_E2E_BASE_URL);
 const storageStateConfigured = Boolean(process.env.IDENTITY_E2E_ADMIN_STORAGE_STATE);
@@ -82,7 +80,7 @@ async function installWorkspaceStub(page: Page, initial = workspace()) {
       }],
     });
   });
-  await page.route(`**/api/organizations/${organizationId}`, async (route, request) => {
+  await page.route(`**/api/organizations/${organizationId}**`, async (route, request) => {
     if (request.method() === "PATCH") {
       const update = request.postDataJSON() as Partial<Workspace["organization"]>;
       current = workspace({
@@ -122,7 +120,7 @@ test.afterEach(async ({}, testInfo) => {
   expect(errors.filter((message) => !/Failed to load resource:.*status of (401|403|409|503)/.test(message))).toEqual([]);
 });
 
-test("stubbed UI path creates an organization, opens its workspace, and saves settings", async ({ page }, testInfo) => {
+test("stubbed UI path creates an organization and saves settings", async ({ page }, testInfo) => {
   await page.setViewportSize(testInfo.project.name.includes("mobile") ? { width: 390, height: 844 } : { width: 1440, height: 900 });
   await installWorkspaceStub(page);
   await page.goto("/organizations/new");
@@ -132,13 +130,7 @@ test("stubbed UI path creates an organization, opens its workspace, and saves se
   await page.getByLabel("อีเมลติดต่อ").fill("owner@example.test");
   await page.getByRole("button", { name: "สร้างองค์กร" }).click();
   await expect(page).toHaveURL(`/organizations/${organizationId}`);
-  await expect(page.getByRole("heading", { name: "สถาบันเรียนรู้ทดสอบ" })).toBeVisible();
-  if (process.env.ORGANIZATION_E2E_CAPTURE_SCREENSHOTS === "1") {
-    const evidenceDirectory = join(process.cwd(), "output", "playwright", "session-007");
-    mkdirSync(evidenceDirectory, { recursive: true });
-    await page.screenshot({ path: join(evidenceDirectory, testInfo.project.name.includes("mobile") ? "workspace-mobile-390x844.png" : "workspace-desktop-1440x900.png"), fullPage: false });
-  }
-  await page.getByRole("link", { name: "ตั้งค่าองค์กร" }).click();
+  await page.goto(`/organizations/${organizationId}/settings`);
   await expect(page.getByRole("heading", { name: "ตั้งค่าองค์กร" })).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toBeVisible();
@@ -157,6 +149,7 @@ test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and s
     await fulfillJson(route, { organizations: [] });
   });
   await page.goto("/organizations");
+  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
   await expect(page.locator('[data-slot="skeleton"]').first()).toBeVisible();
   releaseList?.();
   await expect(page.getByText("ยังไม่มีองค์กร")).toBeVisible();
@@ -183,6 +176,7 @@ test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and s
     await fulfillJson(route, listAttempt === 1 ? { message: "ไม่สามารถโหลดองค์กรได้" } : { organizations: [] }, listAttempt === 1 ? 503 : 200);
   });
   await page.goto("/organizations");
+  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
   await expect(page.getByText("โหลดข้อมูลไม่สำเร็จ")).toBeVisible();
   await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
   await expect(page.getByText("ยังไม่มีองค์กร")).toBeVisible();
@@ -190,6 +184,7 @@ test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and s
   await page.unroute("**/api/organizations");
   await page.route("**/api/organizations", (route) => fulfillJson(route, { message: "กรุณาเข้าสู่ระบบ" }, 401));
   await page.goto("/organizations");
+  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
   await expect(page.getByRole("link", { name: "ไปยังหน้าเข้าสู่ระบบ" })).toBeVisible();
   await expect(page.getByRole("button", { name: "ลองอีกครั้ง" })).toHaveCount(0);
 
@@ -197,6 +192,7 @@ test("stubbed UI path renders loading, empty, duplicate, forbidden, retry, and s
     fulfillJson(route, { message: "ไม่อนุญาต" }, 403),
   );
   await page.goto(`/organizations/${organizationId}`);
+  await page.getByRole("button", { name: "ลองอีกครั้ง" }).click();
   await expect(page.locator('[data-slot="alert-title"]', { hasText: "ไม่อนุญาต" })).toBeVisible();
 
   await page.unroute(`**/api/organizations/${organizationId}`);

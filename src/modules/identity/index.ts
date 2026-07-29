@@ -23,6 +23,7 @@ export {
   createIdentityAuthorizationService,
   requireActor,
   requirePermission,
+  AuthenticationRequiredError,
 } from "./authorization";
 export type {
   Actor,

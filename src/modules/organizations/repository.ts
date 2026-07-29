@@ -51,6 +51,15 @@ export type OrganizationRepository = {
     organizationId: string,
     accountId: string,
   ): Promise<OrganizationMembership | null>;
+  lockOrganizationForUpdate(
+    transaction: DatabaseTransaction,
+    organizationId: string,
+  ): Promise<StoredOrganization | null>;
+  lockActiveMembershipForUpdate(
+    transaction: DatabaseTransaction,
+    organizationId: string,
+    accountId: string,
+  ): Promise<OrganizationMembership | null>;
   updateOrganizationIdentity(
     transaction: DatabaseTransaction,
     input: Pick<
@@ -134,6 +143,35 @@ export function createOrganizationRepository(database: AppDatabase): Organizatio
       return rows[0] ?? null;
     },
 
+    async lockOrganizationForUpdate(transaction, organizationId) {
+      const rows = await transaction
+        .select(organizationSelection)
+        .from(organizations)
+        .where(eq(organizations.id, organizationId))
+        .for("update");
+      return rows[0] ?? null;
+    },
+
+    async lockActiveMembershipForUpdate(transaction, organizationId, accountId) {
+      const rows = await transaction
+        .select({
+          organizationId: organizationMemberships.organizationId,
+          accountId: organizationMemberships.accountId,
+          role: organizationMemberships.role,
+          status: organizationMemberships.status,
+        })
+        .from(organizationMemberships)
+        .where(
+          and(
+            eq(organizationMemberships.organizationId, organizationId),
+            eq(organizationMemberships.accountId, accountId),
+            eq(organizationMemberships.status, "active"),
+          ),
+        )
+        .for("update");
+      return rows[0] ?? null;
+    },
+
     async updateOrganizationIdentity(transaction, input) {
       const rows = await transaction
         .update(organizations)
@@ -150,6 +188,7 @@ export function createOrganizationRepository(database: AppDatabase): Organizatio
           and(
             eq(organizations.id, input.id),
             eq(organizations.version, input.version),
+            eq(organizations.status, "active"),
           ),
         )
         .returning(organizationSelection);

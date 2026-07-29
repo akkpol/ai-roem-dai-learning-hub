@@ -36,6 +36,8 @@ function repository(): OrganizationRepository {
     listForAccount: vi.fn(async () => []),
     findOrganizationById: vi.fn(async () => null),
     findActiveMembership: vi.fn(async () => null),
+    lockOrganizationForUpdate: vi.fn(async () => null),
+    lockActiveMembershipForUpdate: vi.fn(async () => null),
     updateOrganizationIdentity: vi.fn(async () => null),
   };
 }
@@ -116,13 +118,13 @@ describe("organization service", () => {
 
   it("returns the stable stale-version error instead of overwriting", async () => {
     const store = repository();
-    vi.mocked(store.findActiveMembership).mockResolvedValue({
+    vi.mocked(store.lockActiveMembershipForUpdate).mockResolvedValue({
       organizationId: "00000000-0000-4000-8000-000000000010",
       accountId: actor.accountId,
       role: "owner",
       status: "active",
     });
-    vi.mocked(store.findOrganizationById).mockResolvedValue({
+    vi.mocked(store.lockOrganizationForUpdate).mockResolvedValue({
       id: "00000000-0000-4000-8000-000000000010",
       displayName: "Learning School",
       slug: "learning-school",
@@ -147,6 +149,39 @@ describe("organization service", () => {
         expectedVersion: 1,
       }),
     ).resolves.toEqual({ ok: false, error: { code: "stale_version" } });
+  });
+
+  it("does not complete an update when the locked membership was downgraded after authentication", async () => {
+    const store = repository();
+    vi.mocked(store.lockOrganizationForUpdate).mockResolvedValue({
+      id: "00000000-0000-4000-8000-000000000010",
+      displayName: "Learning School",
+      slug: "learning-school",
+      description: null,
+      contactEmail: "contact@example.test",
+      locale: "th-TH",
+      timeZone: "Asia/Bangkok",
+      status: "active",
+      version: 1,
+    });
+    vi.mocked(store.lockActiveMembershipForUpdate).mockResolvedValue({
+      organizationId: "00000000-0000-4000-8000-000000000010",
+      accountId: actor.accountId,
+      role: "member",
+      status: "active",
+    });
+    const service = createOrganizationService(database() as never, store);
+
+    await expect(service.updateOrganizationIdentity(actor, {
+      organizationId: "00000000-0000-4000-8000-000000000010",
+      displayName: "Learning School Updated",
+      description: null,
+      contactEmail: "contact@example.test",
+      locale: "th-TH",
+      timeZone: "Asia/Bangkok",
+      expectedVersion: 1,
+    })).resolves.toEqual({ ok: false, error: { code: "forbidden" } });
+    expect(store.updateOrganizationIdentity).not.toHaveBeenCalled();
   });
 
   it("maps only the organization slug unique conflict to a field error", async () => {

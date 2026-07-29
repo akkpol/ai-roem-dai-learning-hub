@@ -24,7 +24,12 @@ export {
   normalizeOrganizationSlug,
 } from "./domain";
 export { createOrganizationService } from "./service";
-export { getOrganizationHttpHandlers } from "./http";
+export {
+  getOrganizationHttpHandlers,
+  loadOrganizationListForServer,
+  loadOrganizationWorkspaceForServer,
+} from "./http";
+export type { OrganizationListServerState, OrganizationWorkspaceServerState } from "./http";
 export type {
   OrganizationOperationResult,
   OrganizationServiceDependencies,

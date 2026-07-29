@@ -2,8 +2,8 @@
 
 **Committed parent before Task 4 evidence:** `9aeb61f2ce59dd6763bf913308965958b5e05158`
 
-**Evidence candidate:** the commit that contains this handoff
-(`test(organizations): verify session 007 delivery`). This document records
+**Evidence candidate:** the follow-up R3 remediation commit
+(`fix(organizations): close r3 review gaps`). This document records
 local and intercepted acceptance only; independent R3 review and provider CI
 remain required.
 
@@ -15,8 +15,14 @@ independent review verdict and it does not make WP-02 verified.
 - PostgreSQL-backed organization create/list/read/edit contract with automatic
   owner membership, audit, transactional outbox event, slug uniqueness, and
   optimistic version protection.
-- Server-first organization list, create, workspace, and settings routes using
+- Server-first organization list and workspace routes, plus create and settings
+  interactions, using
   the existing React Aria/shadcn `aria-nova` foundation.
+- Identity updates lock the organization and active actor membership in the
+  transaction, authorize against that locked state, and keep the active-status
+  predicate with the optimistic-version mutation. Unauthenticated failures map
+  only from the public typed identity error; unexpected runtime/configuration
+  failures remain a safe retryable response.
 - This session deliberately excludes invitations/role management, instructor
   applications, reviewer workflow, and Production demo data.
 
@@ -38,18 +44,18 @@ independent review verdict and it does not make WP-02 verified.
 
 | Gate | Status | Exact command / evidence | Notes |
 | --- | --- | --- | --- |
-| Architecture | PASS | `npm run architecture` | Re-run after Browser remediation. |
-| Lint | PASS | `npm run lint` | Re-run after Browser remediation. |
-| Typecheck | PASS | `npm run typecheck` | Re-run after Browser remediation. |
-| Full unit tests | PASS | `npx vitest run --maxWorkers=1 --reporter=verbose` | 51 files / 318 tests in 513.44 s before Browser remediation. Post-remediation `tests/organizations` is 6 files / 26 tests PASS; CI must validate the exact committed head. |
+| Architecture | PASS | `npm run architecture` | R3 remediation candidate. |
+| Lint | PASS | `npm run lint` | R3 remediation candidate. |
+| Typecheck | PASS | `npm run typecheck` | R3 remediation candidate. |
+| Focused unit tests | PASS | `npx vitest run tests/organizations --reporter=verbose` | 6 files / 28 tests. CI must validate the exact committed head. |
 | PostgreSQL integration | BLOCKED | `npm run test:integration` requires approved disposable paired URLs | No safe target credentials or reset acknowledgement were provided locally. |
 | Provider preflight | BLOCKED | `npx tsx scripts/database/provider-preflight.ts` requires the same approved Neon identity | No preflight bypass or mock target was used. CI classifier already selects the provider gate because this candidate changes `drizzle/**` and `tests/integration/**`. |
-| Bounded UI E2E | PASS | `npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --reporter=list` | 4 passed / 2 real-stack cases skipped; post-remediation local production server at `http://127.0.0.1:3901`; intercepted UI-state evidence only. |
+| Bounded UI E2E | PASS | `npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --reporter=list` | 4 passed / 2 real-stack cases skipped against rebuilt local production server `http://127.0.0.1:3901`; intercepted UI-state evidence only. |
 | Real-stack E2E | BLOCKED | Requires authenticated disposable owner fixture and explicit mutation opt-in | No session/fixture was provided. |
-| Production build | PASS | `npm run build` | Re-run after Browser remediation; current build completed in 105.1 s (only existing multi-lockfile root warning). |
+| Production build | PASS | `npm run build` | R3 remediation candidate; completed in 106.2 s (only existing multi-lockfile root warning). |
 | Production dependency audit | PASS | `npm audit --omit=dev --audit-level=high` | Exit 0; 4 moderate `esbuild` development-tool advisories, no high/critical production audit failure. |
-| Browser/IAB desktop 1440×900 | PASS | Production server `http://127.0.0.1:3901` after rebuild, health 200 | Create/list layouts readable; no console warning/error. No real authenticated create/edit was attempted. |
-| Browser/IAB mobile 390×844 | PASS | Production server `http://127.0.0.1:3901` after rebuild, health 200 | List `innerWidth=390`, `scrollWidth=390`; create content remains within viewport; controls meet 44 px target. |
+| Browser/IAB desktop 1440×900 | PASS (safe retry state) | Controller reacceptance on rebuilt local production server `http://127.0.0.1:3901` | `/organizations` Server Component rendered the safe retry state `ไม่สามารถโหลดองค์กรได้ในขณะนี้` with missing Identity config; no console warning/error and `innerWidth=scrollWidth=1440`. It is not a real authenticated workspace proof. |
+| Browser/IAB mobile 390×844 | PASS (create validation) | Controller reacceptance on rebuilt local production server | `/organizations/new` blank submit showed three field alerts plus summary; navigation/form controls were exactly 44 px, no console warning/error, and `scrollWidth=375 <= 390`. |
 | Keyboard/focus/reduced motion/console/overflow | PASS with bounded-state note | IAB plus intercepted E2E | 3 px focus ring observed; reduced-motion media query matched with no active animations and `0.00001s` transitions; console warn/error logs empty. The unauthenticated visual state is only intercepted evidence: local real API returned 500 because Identity runtime configuration is absent. |
 | Independent R3 review | NOT RUN | Controller-owned exact-head review | Must be performed after the evidence candidate is committed. |
 
@@ -60,17 +66,18 @@ The prior approved foundation remains unchanged: React Aria base `aria`, style
 Lucide. No shadcn initialization, primitive-base migration, token replacement,
 or unapproved registry source was used in Task 4.
 
-The controller inspected the approved desktop/mobile concepts and the latest
-intercepted workspace screenshots with `view_image`. Screenshot artifacts stay
-under `output/playwright/session-007/` as local evidence and are not committed.
+The controller inspected the approved desktop/mobile concepts. Screenshot
+artifacts stay under `output/playwright/session-007/` and are not committed.
+The success-workspace captures there predate this R3 candidate; they are
+composition references only, never exact-head acceptance proof.
 
 | Check | Concept / foundation rule | Render evidence | Result |
 | --- | --- | --- | --- |
 | True-white neutral/radius | Existing semantic tokens and global radius | Desktop/mobile screenshots | PASS; no token or design-system fork. |
-| Top navigation and action hierarchy | Open workspace with a clear primary/create and settings action | Desktop workspace screenshot | PASS; no fake metrics or dashboard card grid. |
-| Organization identity summary | Display name, immutable slug, locale, time zone, owner role | Intercepted workspace screenshot | PASS. |
-| Mobile hierarchy | Vertical actions and readiness sequence; 44 px controls | `workspace-mobile-390x844.png` | PASS. |
-| Readiness sequence | Concept hierarchy adapted to the established component foundation | Desktop/mobile workspace screenshots | Intentional deviation: remains a compact vertical sequence on desktop. |
+| Top navigation and action hierarchy | Open workspace with a clear primary/create and settings action | Pre-remediation workspace composition reference | Reference only; exact-head successful workspace needs the real authenticated provider fixture. |
+| Organization identity summary | Display name, immutable slug, locale, time zone, owner role | Pre-remediation workspace composition reference | Reference only; not exact-head evidence. |
+| Mobile hierarchy | Vertical actions and readiness sequence; 44 px controls | Controller `/organizations/new` reacceptance | PASS for current create validation controls; success-workspace remains provider-blocked. |
+| Readiness sequence | Concept hierarchy adapted to the established component foundation | Pre-remediation workspace composition reference | Intentional deviation: remains a compact vertical sequence on desktop. |
 | Deferred session scope | Membership row, instructor-application CTA, and membership empty state | Approved session map | Intentional omission: SESSION-008/009 own these features. |
 | Desktop shell typography | Existing Account/Auth foundation takes precedence over broad concept shell | Desktop screenshot | Intentional deviation: retains approved foundation width and typography. |
 | Field and error feedback | FieldGroup/Field/FieldError with invalid announcement | `organization-create-mobile-validation-390x844.png` and focused unit test | PASS; blank submit renders display name, slug, and contact-email errors plus summary, and validation prevents fetch. |
@@ -88,8 +95,6 @@ For real-stack E2E, additionally provide an authenticated disposable owner
 storage state, an approved non-Production database target that passes the
 existing preflight, and `ORGANIZATION_E2E_ALLOW_MUTATIONS=1`. Do not substitute
 mocked route responses for any of these provider claims.
-
-## Remaining delivery steps
 
 ## Browser artifacts (local, not committed)
 

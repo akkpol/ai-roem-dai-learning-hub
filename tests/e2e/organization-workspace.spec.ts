@@ -1,10 +1,20 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const enabled = Boolean(process.env.ORGANIZATION_E2E_BASE_URL);
 const storageStateConfigured = Boolean(process.env.IDENTITY_E2E_ADMIN_STORAGE_STATE);
 const allowRealMutations = process.env.ORGANIZATION_E2E_ALLOW_MUTATIONS === "1";
 const organizationId = "00000000-0000-4000-8000-000000000071";
 const consoleErrors = new Map<string, string[]>();
+
+function recordFixtureOrganization(organizationId: string) {
+  const path = process.env.E2E_FIXTURE_MANIFEST_PATH;
+  if (!path) return;
+  const manifest = JSON.parse(readFileSync(path, "utf8")) as { organizationIds?: string[] };
+  manifest.organizationIds = [...new Set([...(manifest.organizationIds ?? []), organizationId])];
+  writeFileSync(path, `${JSON.stringify(manifest)}\n`, { encoding: "utf8", mode: 0o600 });
+}
 
 type Workspace = {
   organization: {
@@ -178,16 +188,28 @@ test("server-first retry and client form mutation states remain safe", async ({ 
 
 test("real-stack organization journey is opt-in and requires a disposable authenticated fixture", async ({ page }, testInfo) => {
   test.skip(
-    !storageStateConfigured || !allowRealMutations || testInfo.project.name.includes("mobile"),
-    "Requires authenticated disposable owner storage state and ORGANIZATION_E2E_ALLOW_MUTATIONS=1; mobile coverage is provided by the bounded stubbed UI path.",
+    !storageStateConfigured || !allowRealMutations,
+    "Requires authenticated disposable owner storage state and ORGANIZATION_E2E_ALLOW_MUTATIONS=1.",
   );
-  const slug = `e2e-org-${Date.now()}`;
+  await page.setViewportSize(testInfo.project.name.includes("mobile") ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+  const slug = `e2e-org-${testInfo.project.name}-${Date.now()}`;
   await page.goto("/organizations/new");
   await page.getByLabel("ชื่อองค์กร").fill("องค์กรทดสอบ E2E");
   await page.getByLabel("ชื่อ URL").fill(slug);
   await page.getByLabel("อีเมลติดต่อ").fill(process.env.ORGANIZATION_E2E_CONTACT_EMAIL ?? "owner@example.test");
   await page.getByRole("button", { name: "สร้างองค์กร" }).click();
   await expect(page).toHaveURL(/\/organizations\/[0-9a-f-]{36}$/);
+  const organizationId = new URL(page.url()).pathname.split("/").at(-1);
+  if (!organizationId) throw new Error("real-stack organization id is missing");
+  recordFixtureOrganization(organizationId);
+  await expect(page.getByRole("heading", { name: "องค์กรทดสอบ E2E" })).toBeVisible();
+  const artifactDirectory = process.env.ORGANIZATION_E2E_SUCCESS_ARTIFACT_DIR;
+  if (artifactDirectory) {
+    mkdirSync(artifactDirectory, { recursive: true });
+    const screenshot = join(artifactDirectory, `workspace-${testInfo.project.name}.png`);
+    await page.screenshot({ path: screenshot, fullPage: false });
+    await testInfo.attach(`workspace-${testInfo.project.name}`, { path: screenshot, contentType: "image/png" });
+  }
   await page.getByRole("link", { name: "ตั้งค่าองค์กร" }).click();
   await page.getByLabel("ชื่อองค์กร").fill("องค์กรทดสอบ E2E ที่แก้ไขแล้ว");
   await page.getByRole("button", { name: "บันทึกการเปลี่ยนแปลง" }).click();

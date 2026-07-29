@@ -51,6 +51,13 @@ independent review verdict and it does not make WP-02 verified.
    `ORGANIZATION_E2E_ALLOW_MUTATIONS=1`. It makes a real organization mutation
    and must not run against Production.
 
+The provider CI path now runs this real-stack test on both desktop 1440×900 and
+mobile 390×844 after provider preflight, migration, integration, and identity
+acceptance. It starts the production build on `127.0.0.1:3002`, creates a
+manifest-bound disposable verified account/session, captures successful
+workspace screenshots before settings edits, uploads the evidence artifact, and
+uses a trap to clean only the exact manifest account/organization records.
+
 ## Evidence ledger
 
 | Gate | Status | Exact command / evidence | Notes |
@@ -63,6 +70,7 @@ independent review verdict and it does not make WP-02 verified.
 | Provider preflight | BLOCKED | `npx tsx scripts/database/provider-preflight.ts` requires the same approved Neon identity | No preflight bypass or mock target was used. CI classifier already selects the provider gate because this candidate changes `drizzle/**` and `tests/integration/**`. |
 | Bounded UI E2E | PASS | `npx playwright test tests/e2e/organization-workspace.spec.ts --project=identity-admin-desktop --project=identity-admin-mobile --reporter=list` | 4 passed / 2 real-stack cases skipped against rebuilt local production server `http://127.0.0.1:3901`; intercepted UI-state evidence only. |
 | Real-stack E2E | BLOCKED | Requires authenticated disposable owner fixture and explicit mutation opt-in | No session/fixture was provided. |
+| CI authenticated provider browser gate | PENDING | Exact-head provider CI only | Requires preflight-validated disposable Neon target, explicit fixture acknowledgement, and the new manifest-bound fixture/cleanup script; never runs against Production. |
 | Production build | PASS | `npm run build` | Provider-grant repair candidate; completed in 100.1 s (only existing multi-lockfile root warning). |
 | Production dependency audit | PASS | `npm audit --omit=dev --audit-level=high` | Exit 0; 4 moderate `esbuild` development-tool advisories, no high/critical production audit failure. |
 | Browser/IAB desktop 1440×900 | PASS (safe retry state) | Controller final quick reacceptance on exact rebuilt local server `http://127.0.0.1:3901` | `/organizations` Server Component rendered the safe retry state `ไม่สามารถโหลดองค์กรได้ในขณะนี้` with missing Identity config; retry is the only client interaction, console is clean, and `innerWidth=scrollWidth=1440`. It is not a real authenticated workspace proof. |

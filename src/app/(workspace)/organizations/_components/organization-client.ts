@@ -110,3 +110,7 @@ export function organizationWorkspaceView(state: { kind: "loading" } | Organizat
   if (state.kind === "loading") return "loading";
   return state.kind === "error" ? (state.status === 403 ? "forbidden" : "retry") : "content";
 }
+
+export function organizationMutationView(code?: string) {
+  return code === "stale_version" ? "stale" : "idle";
+}

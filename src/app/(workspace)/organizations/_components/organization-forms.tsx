@@ -16,6 +16,8 @@ import type { OrganizationWorkspaceDto } from "@/modules/organizations";
 import {
   loadOrganizationWorkspace,
   type OrganizationIdentityValues,
+  organizationMutationView,
+  organizationWorkspaceView,
   updateOrganizationIdentity,
 } from "./organization-client";
 
@@ -176,10 +178,17 @@ export function OrganizationSettingsForm({ organizationId }: { organizationId: s
     } catch { setFeedback({ tone: "error", message: "เชื่อมต่อไม่สำเร็จ กรุณาลองอีกครั้ง" }); }
     finally { setBusy(false); }
   }
-  if (loading) return <p className="flex items-center gap-2 text-muted-foreground"><Spinner />กำลังโหลดข้อมูลองค์กร…</p>;
-  if (!workspace && feedback?.status === 403) return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>คุณไม่มีสิทธิ์เปิดการตั้งค่าองค์กรนี้</AlertDescription></Alert>;
-  if (!workspace) return <div className="flex flex-col gap-3"><FeedbackAlert feedback={feedback} /><Button variant="outline" className="min-h-11" onPress={() => void load()}>ลองอีกครั้ง</Button></div>;
+  const settingsState = loading
+    ? { kind: "loading" as const }
+    : workspace
+      ? { kind: "success" as const, workspace }
+      : { kind: "error" as const, message: feedback?.message ?? "ไม่สามารถโหลดองค์กรได้", status: feedback?.status, code: feedback?.code, fieldErrors: feedback?.fieldErrors };
+  const settingsView = organizationWorkspaceView(settingsState);
+  if (settingsView === "loading") return <p className="flex items-center gap-2 text-muted-foreground"><Spinner />กำลังโหลดข้อมูลองค์กร…</p>;
+  if (settingsView === "forbidden") return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>คุณไม่มีสิทธิ์เปิดการตั้งค่าองค์กรนี้</AlertDescription></Alert>;
+  if (settingsView === "retry") return <div className="flex flex-col gap-3"><FeedbackAlert feedback={feedback} /><Button variant="outline" className="min-h-11" onPress={() => void load()}>ลองอีกครั้ง</Button></div>;
+  if (!workspace) return null;
   const canEdit = workspace.membership.role === "owner" || workspace.membership.role === "manager";
   if (!canEdit) return <Alert variant="destructive"><AlertTitle>ไม่อนุญาต</AlertTitle><AlertDescription>เฉพาะเจ้าของหรือผู้จัดการองค์กรเท่านั้นที่แก้ไขข้อมูลนี้ได้</AlertDescription></Alert>;
-  return <Card><CardHeader><CardTitle>ข้อมูลที่แสดง</CardTitle><CardDescription>ชื่อ URL: {workspace.organization.slug}</CardDescription></CardHeader><CardContent><form onSubmit={submit}><FieldGroup><IdentityFields values={values} setValues={setValues} errors={feedback?.fieldErrors} disabled={busy} includeSlug={false} /><SubmitButton busy={busy} pending="กำลังบันทึก">บันทึกการเปลี่ยนแปลง</SubmitButton>{feedback?.code === "stale_version" ? <Button type="button" variant="outline" className="min-h-11" onPress={() => void load()}>โหลดข้อมูลใหม่</Button> : null}<FeedbackAlert feedback={feedback} /></FieldGroup></form></CardContent></Card>;
+  return <Card><CardHeader><CardTitle>ข้อมูลที่แสดง</CardTitle><CardDescription>ชื่อ URL: {workspace.organization.slug}</CardDescription></CardHeader><CardContent><form onSubmit={submit}><FieldGroup><IdentityFields values={values} setValues={setValues} errors={feedback?.fieldErrors} disabled={busy} includeSlug={false} /><SubmitButton busy={busy} pending="กำลังบันทึก">บันทึกการเปลี่ยนแปลง</SubmitButton>{organizationMutationView(feedback?.code) === "stale" ? <Button type="button" variant="outline" className="min-h-11" onPress={() => void load()}>โหลดข้อมูลใหม่</Button> : null}<FeedbackAlert feedback={feedback} /></FieldGroup></form></CardContent></Card>;
 }

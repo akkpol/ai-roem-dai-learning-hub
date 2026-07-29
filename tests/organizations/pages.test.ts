@@ -35,6 +35,10 @@ describe("organization workspace pages", () => {
   it("uses real request state helpers for loading, empty, retry, forbidden and stale-update states", async () => {
     const workspace = read("src/app/(workspace)/organizations/_components/organization-workspace.tsx");
     const forms = read("src/app/(workspace)/organizations/_components/organization-forms.tsx");
+    expect(workspace).toContain("organizationListView(state)");
+    expect(workspace).toContain("organizationWorkspaceView(state)");
+    expect(forms).toContain("organizationWorkspaceView(settingsState)");
+    expect(forms).toContain("organizationMutationView(feedback?.code)");
     expect(workspace).toContain('from "@/components/ui/skeleton"');
     expect(workspace).toContain("EmptyMedia");
     expect(organizationListView({ kind: "loading" })).toBe("loading");
@@ -43,7 +47,7 @@ describe("organization workspace pages", () => {
     expect(organizationWorkspaceView({ kind: "error", message: "forbidden", status: 403 })).toBe("forbidden");
     expect(workspace).toContain("ลองอีกครั้ง");
     expect(workspace).toContain("ไม่อนุญาต");
-    expect(forms).toContain("stale_version");
+    expect(workspace).not.toContain("learninghub.example");
     expect(workspace).not.toMatch(/รายได้|ผู้เรียนทั้งหมด|conversion/i);
 
     const fetchMock = vi.fn(async (...args: [RequestInfo | URL, RequestInit?]) => {

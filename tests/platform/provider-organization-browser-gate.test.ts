@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
+import { resolveFixtureAccountId } from "../../scripts/e2e/organization-provider-fixture";
+
 describe("provider organization browser gate", () => {
   it("requires provider preflight, an explicit acknowledgement, manifest-bound cleanup, and isolated port", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
@@ -33,6 +35,10 @@ describe("provider organization browser gate", () => {
     expect(fixture).toContain("REMOTE_TEST_NEON_IDENTITY_ACK");
     expect(fixture).toContain("identityAcknowledgement(providerIdentity) !== identityAcknowledgement(manifest.providerIdentity)");
     expect(fixture).not.toContain("select organization_id from organization_memberships where account_id");
+    expect(fixture).toContain("select id from identity_accounts where email = $1");
+    expect(fixture).toContain("fixtureEmail.test(value.email)");
+    expect(fixture).toContain("e2e fixture account discovery is ambiguous");
+    expect(fixture).toContain("where id = $1 or email = $2");
     expect(fixture).toContain("organization.created.v1");
     expect(fixture).toContain("rmSync(manifestPath); // only after committed and verified deletion");
   });
@@ -46,5 +52,22 @@ describe("provider organization browser gate", () => {
     const config = readFileSync("playwright.config.ts", "utf8");
     expect(config).toContain('providerBrowserGate ? "off"');
     expect(config).toContain("retries: providerBrowserGate ? 0");
+  });
+
+  it("recovers an exact fixture account from a partial prepare manifest", () => {
+    const accountId = "11111111-1111-4111-8111-111111111111";
+    const email = "org-e2e-0123456789abcdef01234567@example.test";
+
+    expect(resolveFixtureAccountId(email, [])).toBeNull();
+    expect(resolveFixtureAccountId(email, [{ id: accountId }])).toBe(accountId);
+    expect(() => resolveFixtureAccountId("owner@example.test", [{ id: accountId }])).toThrow(
+      "e2e fixture manifest is invalid",
+    );
+    expect(() =>
+      resolveFixtureAccountId(email, [
+        { id: accountId },
+        { id: "22222222-2222-4222-8222-222222222222" },
+      ]),
+    ).toThrow("e2e fixture account discovery is ambiguous");
   });
 });

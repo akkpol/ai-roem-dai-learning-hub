@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { eq } from "drizzle-orm";
 import { Client } from "pg";
@@ -19,6 +20,16 @@ type Manifest = { version: 2; providerIdentity: ProviderIdentity; email: string;
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const slug = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
+const fixtureEmail = /^org-e2e-[0-9a-f]{24}@example\.test$/;
+
+export function resolveFixtureAccountId(email: string, rows: Array<{ id: string }>): string | null {
+  if (!fixtureEmail.test(email)) throw new Error("e2e fixture manifest is invalid");
+  if (rows.length === 0) return null;
+  if (rows.length !== 1 || !rows[0]?.id || !uuid.test(rows[0].id)) {
+    throw new Error("e2e fixture account discovery is ambiguous");
+  }
+  return rows[0].id;
+}
 
 function required(name: string) { const value = process.env[name]; if (!value) throw new Error(`e2e fixture configuration is invalid: ${name}`); return value; }
 function path() {
@@ -34,7 +45,7 @@ function atomicWrite(manifestPath: string, manifest: Manifest) {
 }
 function readManifest(manifestPath: string): Manifest {
   const value = JSON.parse(readFileSync(manifestPath, "utf8")) as Partial<Manifest>;
-  if (value.version !== 2 || !value.providerIdentity || !value.email || !Array.isArray(value.organizations) || !value.organizations.every((entry) => entry && typeof entry.slug === "string" && slug.test(entry.slug) && (entry.id === null || typeof entry.id === "string" && uuid.test(entry.id)))) throw new Error("e2e fixture manifest is invalid");
+  if (value.version !== 2 || !value.providerIdentity || typeof value.email !== "string" || !fixtureEmail.test(value.email) || !Array.isArray(value.organizations) || !value.organizations.every((entry) => entry && typeof entry.slug === "string" && slug.test(entry.slug) && (entry.id === null || typeof entry.id === "string" && uuid.test(entry.id)))) throw new Error("e2e fixture manifest is invalid");
   if (value.accountId !== null && (typeof value.accountId !== "string" || !uuid.test(value.accountId))) throw new Error("e2e fixture manifest is invalid");
   return value as Manifest;
 }
@@ -86,6 +97,17 @@ async function cleanup() {
   const migration = new Client({ connectionString: required("MIGRATION_DATABASE_URL") });
   try {
     await migration.connect(); await migration.query("begin");
+    if (!manifest.accountId) {
+      const discoveredAccount = await migration.query<{ id: string }>(
+        "select id from identity_accounts where email = $1",
+        [manifest.email],
+      );
+      const discoveredAccountId = resolveFixtureAccountId(manifest.email, discoveredAccount.rows);
+      if (discoveredAccountId) {
+        manifest.accountId = discoveredAccountId;
+        atomicWrite(manifestPath, manifest);
+      }
+    }
     if (manifest.accountId) {
       for (const organization of manifest.organizations.filter((entry) => entry.id === null)) {
         const discovered = await migration.query<{ id: string }>("select o.id from organizations o join organization_memberships m on m.organization_id = o.id join organization_audit_events a on a.organization_id = o.id where o.slug = $1 and m.account_id = $2 and a.actor_account_id = $2 and a.action = 'organization.created.v1'", [organization.slug, manifest.accountId]);
@@ -102,10 +124,17 @@ async function cleanup() {
       await migration.query("delete from identity_audit_events where account_id = $1 or actor_account_id = $1", [manifest.accountId]); await migration.query("delete from identity_account_deletion_requests where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_email_outbox where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_policy_acceptances where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_profiles where account_id = $1", [manifest.accountId]); await migration.query("delete from identity_sessions where user_id = $1", [manifest.accountId]); await migration.query("delete from identity_auth_factors where user_id = $1", [manifest.accountId]); await migration.query("delete from identity_accounts where id = $1", [manifest.accountId]);
     }
     await migration.query("commit");
-    const verification = await migration.query<{ remaining: string }>("select (select count(*) from identity_accounts where id = $1) + (select count(*) from organizations where id = any($2::uuid[])) as remaining", [manifest.accountId, organizationIds]);
+    const verification = await migration.query<{ remaining: string }>(
+      "select (select count(*) from identity_accounts where id = $1 or email = $2) + (select count(*) from organizations where id = any($3::uuid[])) as remaining",
+      [manifest.accountId, manifest.email, organizationIds],
+    );
     if (verification.rows[0]?.remaining !== "0") throw new Error("e2e fixture cleanup verification failed");
     rmSync(manifestPath); // only after committed and verified deletion
   } catch (error) { await migration.query("rollback").catch(() => undefined); throw error; } finally { await migration.end(); }
 }
-if (process.argv[2] === "prepare") await prepare(); else if (process.argv[2] === "cleanup") await cleanup(); else throw new Error("usage: organization-provider-fixture <prepare|cleanup>");
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  if (process.argv[2] === "prepare") await prepare();
+  else if (process.argv[2] === "cleanup") await cleanup();
+  else throw new Error("usage: organization-provider-fixture <prepare|cleanup>");
+}
 export { toStorageState };
